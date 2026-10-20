@@ -84,7 +84,13 @@ Deno.serve(async(req:Request)=>{
    const prompt="MISIÓN CEO: "+m.title+"\nOBJETIVO ESTRATÉGICO: "+m.objective+"\nTU DEPARTAMENTO: "+job.department+"\nTU TAREA: "+job.directive+"\nFECHA UTC: "+new Date().toISOString().slice(0,10)+"\nENTREGABLE: informe operativo accionable, hechos comprobados, recomendaciones, dependencias, requisitos pendientes y siguientes pasos para entregar al siguiente departamento. No simules resultados externos.\n\nMEMORIA COMPARTIDA DE LOS DEPARTAMENTOS ANTERIORES:\n"+(summary||"Primer departamento, aún sin informes anteriores.");
    const official=research.has(job.department)?await officialEvidence(m.title):{sources:[],context:''};
    const isStudioCreative=job.step_seq===7&&/PULSE STUDIO/i.test(m.title);
-   const creativeContract=isStudioCreative?"\n\nCONTRATO DE TRASPASO AL ESTUDIO CREATIVO: Al FINAL de tu informe incluye exactamente un bloque XML <creative_json>{\\\"brand\\\":\\\"ATELIER CALMA\\\",\\\"hero\\\":\\\"titular editorial corto\\\",\\\"hero_sub\\\":\\\"frase breve\\\",\\\"second\\\":\\\"segundo titular\\\",\\\"second_sub\\\":\\\"sublinea\\\",\\\"third\\\":\\\"tercer titular\\\",\\\"third_sub\\\":\\\"sublinea\\\",\\\"story_hero\\\":\\\"frase para story\\\",\\\"story_detail\\\":\\\"segunda story\\\",\\\"cta\\\":\\\"CONOCE EL CONCEPTO\\\"}</creative_json>. Reemplaza los valores por textos originales en español para una marca FICTICIA de bienestar. Copys factibles, sin claims médicos ni datos inventados. Solo JSON válido, sin bloques Markdown dentro del XML. No digas haber creado imágenes.":"";
+   const creativeContract=isStudioCreative?`
+CONTRATO DE TRASPASO AL ESTUDIO CREATIVO:
+Al FINAL de tu informe incluye exactamente un bloque XML:
+<creative_json>{"brand":"ATELIER CALMA","hero":"titular editorial corto","hero_sub":"frase breve","second":"segundo titular","second_sub":"sublinea","third":"tercer titular","third_sub":"sublinea","story_hero":"frase para story","story_detail":"segunda story","cta":"CONOCE EL CONCEPTO"}</creative_json>
+Reemplaza los valores por textos originales en español para una marca FICTICIA de bienestar. Copy concretos, sin claims médicos ni cifras inventadas.
+Debes escribir JSON válido con comillas normales, sin barras inversas ni bloques Markdown dentro del XML. No digas haber creado imágenes.
+`:"";
    const output=await askGemini(key,job.department,prompt+creativeContract,official,professionalSpec);
    const {error:tError}=await db.from("pulse_tasks").update({status:"completed",result:output.result,sources:output.sources,error:null}).eq("id",job.task_id);
    if(tError)throw Error("No se pudo guardar la tarea Gemini");
