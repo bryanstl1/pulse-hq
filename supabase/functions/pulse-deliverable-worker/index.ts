@@ -157,9 +157,13 @@ Deno.serve(async(req:Request)=>{
     {variant:"report_pdf",title:"Informe profesional PDF",name:"informe_departamento.pdf",mime:"application/pdf",body:await reportPdf(task),source:"authored_report"},
     {variant:"report_markdown",title:"Informe editable Markdown",name:"informe_editable.md",mime:"text/markdown",body:bytes(markdown(task)),source:"authored_report"}
    ];
-   if(["Marketing y crecimiento","Producción de contenido","Comunidad"].includes(task.department)){
+   const proCreativeBrief=/PULSE STUDIO|ATELIER CALMA|BELLEZA Y WELLNESS|EDITORIAL LUXURY|AGENCIA PREMIUM/i.test(task.instruction);
+   if(["Marketing y crecimiento","Producción de contenido","Comunidad"].includes(task.department)&&!proCreativeBrief){
+    // Legacy vector samples are preserved strictly as technical draft templates.
     work.push(poster(task,"post_portrait",0),poster(task,"story_vertical",1),poster(task,"post_square",2));
    }
+   // Professional briefs require visually inspected assets created by a real design/image engine.
+   // The worker must never hallucinate client-ready imagery from placeholder SVG shapes.
    for(const o of work){
     const path=base+o.name;
     const {error:uploadError}=await db.storage.from(BUCKET).upload(path,o.body,{contentType:o.mime,upsert:true,cacheControl:"3600"});
