@@ -32,6 +32,7 @@ function render(state,esc,card,section){
   const pieces=list(offer.deliverables).slice(0,6);
   out.push(card('<div class="row between"><strong>'+escValue(esc,offer.title)+'</strong><span class="pill off">POR VALIDAR</span></div><p>'+escValue(esc,offer.scope)+'</p><div style="font-size:13px;color:#bdd0dc">'+pieces.map(x=>'✓ '+escValue(esc,x)).join('<p style="margin:6px 0">')+'</div><p><strong>Precio de prueba:</strong> $'+Number(offer.price_estimate_mxn||0).toLocaleString('es-MX')+' MXN, estimación sin ventas ni mercado validado.</p>'));
  }
+ out.push('<button class="btn main full" data-nav="creative">✦ Abrir Estudio Creativo: campaña visual premium</button>');
  out.push(section("PRIMER PROYECTO DE PORTAFOLIO","BRIEF PROFESIONAL"));
  for(const b of briefs){
   out.push(card('<div class="row between"><strong>'+escValue(esc,b.title)+'</strong><span class="pill off">BRIEF · SIN ASSETS FINALES</span></div><p>'+escValue(esc,b.objective)+'</p><p><strong>Audiencia:</strong> '+escValue(esc,b.audience)+'</p><p><strong>Dirección de arte:</strong> '+escValue(esc,b.visual_direction)+'</p><details><summary>Ver contrato de entregables</summary><div class="task-text">'+list(b.required_assets).map(x=>'<p>• '+escValue(esc,x)+'</p>').join('')+'</div></details><details><summary>Revisión de calidad requerida</summary><div class="task-text">'+list(b.quality_requirements).map(x=>'<p>• '+escValue(esc,x)+'</p>').join('')+'</div></details><div class="notice">Atelier Calma es una marca ficticia de muestra. No hay autorización para afirmar colaboraciones reales.</div>'));
