@@ -12,6 +12,7 @@ function render(state,esc,card,section){
  out.push('<div class="stats"><div class="stat"><b>'+state.venturePacks.length+'</b><span>Kits producidos</span></div><div class="stat tint"><b>3</b><span>Artes por kit</span></div><div class="stat warn"><b>0</b><span>Clientes confirmados</span></div></div>');
  out.push(card('<div class="row between"><strong>'+safe(esc,v.internal_name)+'</strong><span class="pill off">'+safe(esc,v.status==="validation"?"Validación":v.status)+'</span></div><p><strong>Comprador:</strong> '+safe(esc,v.buyer)+'</p><p><strong>Producto:</strong> '+safe(esc,v.business_model)+'</p><p><strong>Precio de prueba:</strong> $'+safe(esc,v.price_test_mxn)+' MXN/mes (hipótesis, no cobro activo).</p><div class="notice">Sin clientes ni ventas confirmadas. Los artes son ilustraciones vectoriales originales y no fotografías de IA. No se publica ni contacta automáticamente.</div>'));
  out.push(section("CENTRO DE PRODUCCIÓN","ENTREGABLES"));
+ out.push('<button class="btn main full" data-nav="deliverables">✦ Abrir archivos automáticos de todos los departamentos ↗</button>');
  if(!p){out.push(card('<p>Aún no existe una campaña guardada.</p>'));return out.join("")}
  const options=state.venturePacks.map(x=>'<option value="'+safe(esc,x.id)+'"'+(p.id===x.id?' selected':'')+'>'+safe(esc,x.week_start)+' · '+safe(esc,x.campaign_name)+'</option>').join("");
  const label={pending_review:"Pendiente de revisión",approved:"Aprobado internamente",rejected:"Requiere correcciones"}[p.status]||p.status;
