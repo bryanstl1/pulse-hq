@@ -31,6 +31,7 @@ function render(state,esc,card,section){
  for(const [i,g] of groups.entries()){
   out+='<details class="card" '+(i===0?'open':'')+' style="margin-bottom:12px"><summary style="cursor:pointer"><strong>'+esc(g.dept)+'</strong><div class="muted" style="margin-top:6px;font-size:12px">'+esc(String(g.title).slice(0,155))+'</div><small>'+g.files.length+' archivos · Abrir paquete</small></summary>';
   const sorted=g.files.slice().sort((a,b)=>['report_pdf','post_portrait','story_vertical','post_square','report_markdown'].indexOf(a.variant)-['report_pdf','post_portrait','story_vertical','post_square','report_markdown'].indexOf(b.variant));
+  out+='<button class="btn main full" data-delivery-zip="'+esc(g.taskId)+'"'+(!sorted.every(x=>Boolean(urlById[x.id]))||state.deliveryBusy?' disabled':'')+'>⬇ Descargar paquete completo ZIP (PDF + SVG + PNG)</button>';
   for(const f of sorted){
    const link=urlById[f.id];
    out+='<div style="border-top:1px solid #304357;margin-top:14px;padding-top:14px">';
@@ -48,22 +49,51 @@ function render(state,esc,card,section){
  out+=card('<p><strong>Archivos editables, sin cuenta de pago adicional:</strong> descarga un SVG y ábrelo en Figma, Canva o un editor vectorial compatible. Algunos elementos de texto o degradados pueden requerir ajustes tras la importación.</p><p>La cuenta Figma vinculada a ChatGPT tiene actualmente asiento de visualización, por lo que no hemos activado escritura automática desde PULSE HQ.</p><p><a href="https://www.figma.com/files/" target="_blank" rel="noopener noreferrer">Abrir mis archivos de Figma ↗</a></p>');
  return out;
 }
-async function exportPng(file,uri){
- if(file?.mime_type!=='image/svg+xml'||!uri)throw Error('Archivo no disponible.');
- const response=await fetch(uri,{cache:'no-store'});
- if(!response.ok)throw Error('No se pudo descargar el diseño SVG');
- const svg=await response.blob(),blobUrl=URL.createObjectURL(svg);
+
+async function svgToPng(svg,width,height){
+ const blobUrl=URL.createObjectURL(svg);
  try{
-  const img=new Image();
-  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('No se pudo abrir el diseño vectorial'));img.src=blobUrl});
-  const canvas=document.createElement('canvas');canvas.width=file.width||1080;canvas.height=file.height||1350;
-  const ctx=canvas.getContext('2d');
-  if(!ctx)throw Error('Tu navegador no admite esta exportación');
-  ctx.drawImage(img,0,0,canvas.width,canvas.height);
-  const png=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('No se pudo generar PNG')),'image/png'));
-  const pngUrl=URL.createObjectURL(png);const a=document.createElement('a');a.href=pngUrl;a.download=(file.filename||'diseno').replace(/\.svg$/i,'.png');document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(pngUrl),120000);
+  const image=new Image();
+  await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error("No se pudo abrir el vector SVG"));image.src=blobUrl});
+  const canvas=document.createElement("canvas");canvas.width=width||1080;canvas.height=height||1350;
+  const ctx=canvas.getContext("2d");if(!ctx)throw Error("Canvas no disponible en este navegador");
+  ctx.drawImage(image,0,0,canvas.width,canvas.height);
+  return await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error("No se pudo convertir el vector a PNG")),"image/png"));
  }finally{URL.revokeObjectURL(blobUrl)}
 }
-window.PulseDeliverableStudio={render,exportPng,BUCKET};
+function download(blob,name){
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),120000);
+}
+async function exportPng(file,uri){
+ if(file?.mime_type!=="image/svg+xml"||!uri)throw Error("Diseño no disponible");
+ const response=await fetch(uri,{cache:"no-store"});
+ if(!response.ok)throw Error("No se pudo abrir el diseño privado");
+ const png=await svgToPng(await response.blob(),file.width,file.height);
+ download(png,(file.filename||"diseno.svg").replace(/\.svg$/i,".png"));
+}
+async function exportZip(files,links,taskLabel){
+ if(!window.JSZip)throw Error("El motor ZIP no está cargado. Actualiza Safari.");
+ if(!files?.length)throw Error("No hay archivos disponibles");
+ const zip=new window.JSZip();
+ const dir=zip.folder("PULSE-HQ-ENTREGABLES");
+ for(const f of files){
+  const uri=links[f.id];
+  if(!uri)throw Error("Falta el enlace de "+f.title+". Actualiza archivos.");
+  const res=await fetch(uri,{cache:"no-store"});
+  if(!res.ok)throw Error("No se pudo obtener "+f.filename);
+  const blob=await res.blob();
+  dir.file(f.filename,blob);
+  if(f.mime_type==="image/svg+xml"){
+   const png=await svgToPng(blob,f.width,f.height);
+   dir.file(f.filename.replace(/\.svg$/i,".png"),png);
+  }
+ }
+ dir.file("LEEME.txt","PULSE HQ - Entregables generados de tareas internas.\nLas piezas SVG son vectores originales editables en herramientas compatibles.\nLos PNG son exportaciones de esas piezas.\nLos informes deben revisarse antes de uso comercial.\nLos archivos no representan publicaciones, contactos o ventas ejecutadas.\n");
+ const result=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:4}});
+ const safe=String(taskLabel||"campana").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,44).toLowerCase()||"entregables";
+ download(result,"PULSE-HQ-"+safe+".zip");
+}
+window.PulseDeliverableStudio={render,exportPng,exportZip,BUCKET};
 })();
