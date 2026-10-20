@@ -11,6 +11,12 @@ function render(state,esc,card,section){
  out.push('<p class="desc">Primera unidad comercial: suscripción de kits de marketing para estéticas caninas de México.</p>');
  out.push('<div class="stats"><div class="stat"><b>'+state.venturePacks.length+'</b><span>Kits producidos</span></div><div class="stat tint"><b>3</b><span>Artes por kit</span></div><div class="stat warn"><b>0</b><span>Clientes confirmados</span></div></div>');
  out.push(card('<div class="row between"><strong>'+safe(esc,v.internal_name)+'</strong><span class="pill off">'+safe(esc,v.status==="validation"?"Validación":v.status)+'</span></div><p><strong>Comprador:</strong> '+safe(esc,v.buyer)+'</p><p><strong>Producto:</strong> '+safe(esc,v.business_model)+'</p><p><strong>Precio de prueba:</strong> $'+safe(esc,v.price_test_mxn)+' MXN/mes (hipótesis, no cobro activo).</p><div class="notice">Sin clientes ni ventas confirmadas. Los artes son ilustraciones vectoriales originales y no fotografías de IA. No se publica ni contacta automáticamente.</div>'));
+ const mission=state.missions?.find(m=>m.id===v.mission_id);
+ const missionSteps=state.missionSteps?.filter(x=>x.mission_id===v.mission_id)||[];
+ if(mission&&missionSteps.length){
+   const done=missionSteps.filter(x=>x.status==='completed').length;
+   out.push(card('<h3>🏢 Trabajo coordinado de 10 departamentos</h3><div class="row between"><strong>Avance de la empresa</strong><span class="pill '+(done===missionSteps.length?'success':'off')+'">'+done+'/'+missionSteps.length+' etapas</span></div><p>Dirección, inteligencia, marketing, contenido, ventas, finanzas y los demás equipos comparten resultados en una misión empresarial real.</p><button class="btn slim full" data-venture-mission="'+safe(esc,mission.id)+'">Ver actividad de los departamentos ↗</button>'));
+ }
  out.push(section("CENTRO DE PRODUCCIÓN","ENTREGABLES"));
  out.push('<button class="btn main full" data-nav="deliverables">✦ Abrir archivos automáticos de todos los departamentos ↗</button>');
  if(!p){out.push(card('<p>Aún no existe una campaña guardada.</p>'));return out.join("")}
