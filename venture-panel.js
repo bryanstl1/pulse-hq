@@ -1,55 +1,42 @@
 (function(){
 "use strict";
-const safe=(s,v)=>s(String(v??""));
+const escValue=(fn,x)=>fn(String(x??""));
+const list=(arr)=>Array.isArray(arr)?arr:[];
 function render(state,esc,card,section){
- if(state.mode==="demo")return '<h1 class="heading">Empresa V01</h1>'+card("<p>Inicia sesión para consultar entregables reales.</p>");
- if(!state.ventureReady)return '<h1 class="heading">Empresa V01</h1>'+card("<p>Consultando operación...</p>");
- const v=state.ventureRows[0],p=state.venturePacks.find(x=>x.id===state.ventureSelected)||state.venturePacks[0];
- if(!v)return '<h1 class="heading">Empresa V01</h1>'+card("<p>Unidad comercial no configurada.</p>");
+ if(state.mode==="demo")return '<h1 class="heading">PULSE STUDIO</h1>'+card("<p>Inicia sesión para consultar la empresa y sus entregables reales.</p>");
+ if(!state.ventureReady)return '<h1 class="heading">PULSE STUDIO</h1>'+card("<p>Consultando la operación empresarial...</p>");
+ const v=state.ventureRows.find(x=>String(x.internal_name).startsWith("PULSE STUDIO"));
+ const brand=state.ventureBrandProfile;
+ const offers=list(state.ventureOffers).filter(o=>o.venture_id===v?.id);
+ const briefs=list(state.ventureBriefs).filter(x=>x.venture_id===v?.id);
+ const legacy=state.ventureRows.filter(x=>x.id!==v?.id);
+ if(!v)return '<div class="eyebrow">EMPRESA INDEPENDIENTE</div><h1 class="heading">PULSE STUDIO</h1>'+card('<p>La unidad comercial está pendiente de configurar.</p>');
  const out=[];
- out.push('<div class="eyebrow">PULSE HQ / EMPRESA INDEPENDIENTE</div><h1 class="heading">PET BRAND OPS 🐾</h1>');
- out.push('<p class="desc">Primera unidad comercial: suscripción de kits de marketing para estéticas caninas de México.</p>');
- out.push('<div class="stats"><div class="stat"><b>'+state.venturePacks.length+'</b><span>Kits producidos</span></div><div class="stat tint"><b>3</b><span>Artes por kit</span></div><div class="stat warn"><b>0</b><span>Clientes confirmados</span></div></div>');
- out.push(card('<div class="row between"><strong>'+safe(esc,v.internal_name)+'</strong><span class="pill off">'+safe(esc,v.status==="validation"?"Validación":v.status)+'</span></div><p><strong>Comprador:</strong> '+safe(esc,v.buyer)+'</p><p><strong>Producto:</strong> '+safe(esc,v.business_model)+'</p><p><strong>Precio de prueba:</strong> $'+safe(esc,v.price_test_mxn)+' MXN/mes (hipótesis, no cobro activo).</p><div class="notice">Sin clientes ni ventas confirmadas. Los artes son ilustraciones vectoriales originales y no fotografías de IA. No se publica ni contacta automáticamente.</div>'));
- const mission=state.missions?.find(m=>m.id===v.mission_id);
- const missionSteps=state.missionSteps?.filter(x=>x.mission_id===v.mission_id)||[];
- if(mission&&missionSteps.length){
-   const done=missionSteps.filter(x=>x.status==='completed').length;
-   out.push(card('<h3>🏢 Trabajo coordinado de 10 departamentos</h3><div class="row between"><strong>Avance de la empresa</strong><span class="pill '+(done===missionSteps.length?'success':'off')+'">'+done+'/'+missionSteps.length+' etapas</span></div><p>Dirección, inteligencia, marketing, contenido, ventas, finanzas y los demás equipos comparten resultados en una misión empresarial real.</p><button class="btn slim full" data-venture-mission="'+safe(esc,mission.id)+'">Ver actividad de los departamentos ↗</button>'));
+ out.push('<div class="eyebrow">PULSE HQ / EMPRESA INDEPENDIENTE</div><h1 class="heading">PULSE STUDIO</h1>');
+ out.push('<p class="desc">Estudio de diseño editorial, crecimiento comercial y automatización para negocios. Primer sector de validación: Belleza &amp; Wellness.</p>');
+ out.push('<div class="stats"><div class="stat"><b>10</b><span>Directores IA</span></div><div class="stat tint"><b>'+offers.length+'</b><span>Ofertas piloto</span></div><div class="stat warn"><b>0</b><span>Clientes confirmados</span></div></div>');
+ out.push(card('<div class="row between"><strong>'+escValue(esc,v.internal_name)+'</strong><span class="pill off">Validación</span></div><p><strong>Cliente ideal:</strong> '+escValue(esc,v.buyer)+'</p><p><strong>Modelo:</strong> '+escValue(esc,v.business_model)+'</p><div class="notice">Negocio en validación. No hay ventas, contratos, cobros ni clientes confirmados.</div>'));
+ out.push('<button class="btn main full" data-nav="professionals">♛ Conocer a los 10 directores profesionales</button>');
+ out.push(section("DIRECCIÓN DE MARCA","ESTÁNDAR"));
+ if(brand){
+  out.push(card('<h3>'+escValue(esc,brand.visual_style)+'</h3><p><strong>Posicionamiento:</strong> '+escValue(esc,brand.positioning)+'</p><p><strong>Tono:</strong> '+escValue(esc,brand.tone)+'</p><div class="notice">PROHIBIDO: clipart genérico, caricaturas infantiles, piezas sin brief, cifras inventadas y entregables etiquetados como finales sin revisión de calidad.</div>'));
  }
- out.push(section("CENTRO DE PRODUCCIÓN","ENTREGABLES"));
- out.push('<button class="btn main full" data-nav="deliverables">✦ Abrir archivos automáticos de todos los departamentos ↗</button>');
- if(!p){out.push(card('<p>Aún no existe una campaña guardada.</p>'));return out.join("")}
- const options=state.venturePacks.map(x=>'<option value="'+safe(esc,x.id)+'"'+(p.id===x.id?' selected':'')+'>'+safe(esc,x.week_start)+' · '+safe(esc,x.campaign_name)+'</option>').join("");
- const label={pending_review:"Pendiente de revisión",approved:"Aprobado internamente",rejected:"Requiere correcciones"}[p.status]||p.status;
- const packBox=[];
- packBox.push('<h3>'+safe(esc,p.campaign_name)+'</h3><div class="row between"><span class="pill '+(p.status==="approved"?"success":"off")+'">'+safe(esc,label)+'</span><span class="muted">Semana '+safe(esc,p.week_start)+'</span></div>');
- packBox.push('<label for="ventureSelect">Campañas anteriores</label><select id="ventureSelect" class="venture-form">'+options+'</select>');
- packBox.push('<label for="ventureBrand">Marca que aparecerá en las imágenes</label><input id="ventureBrand" class="venture-form" maxlength="31" value="'+safe(esc,state.ventureBrand)+'">');
- packBox.push('<button class="btn slim full" data-action="venture-preview">Actualizar vista previa</button>');
- packBox.push('<button class="btn main full" data-action="venture-zip"'+(state.ventureExporting?" disabled":"")+'>⬇ Descargar kit ZIP: 3 PNG + PDF + copies</button>');
- packBox.push('<button class="btn slim full" data-action="venture-pdf"'+(state.ventureExporting?" disabled":"")+'>⬇ Descargar dossier PDF</button>');
- packBox.push('<div class="notice">Tres artes a 1080 píxeles de ancho y PDF con imágenes, copies, estrategia, plan comercial y finanzas.</div>');
- if(p.error)packBox.push('<p class="muted">Incidencia de generación: '+safe(esc,p.error)+'</p>');
- out.push(card(packBox.join("")));
- const art=[];
- if(Array.isArray(p.posts)&&window.PulseVentureStudio){
-  p.posts.forEach((post,i)=>{
-    const uri=window.PulseVentureStudio.preview(post,i,state.ventureBrand);
-    art.push('<div class="venture-art"><img loading="lazy" src="'+uri+'" alt="Arte visual '+(i+1)+' de estética canina">');
-    art.push('<strong>Imagen '+(i+1)+' · '+safe(esc,post.format||"post")+'</strong>');
-    art.push('<button class="btn slim" data-venture-image="'+i+'">⬇ Descargar PNG</button>');
-    art.push('<details><summary>Ver texto de la publicación</summary><p>'+safe(esc,post.caption||"")+'</p></details></div>');
-  });
+ out.push(section("PRODUCTOS Y SERVICIOS","HIPÓTESIS COMERCIALES"));
+ for(const offer of offers){
+  const pieces=list(offer.deliverables).slice(0,6);
+  out.push(card('<div class="row between"><strong>'+escValue(esc,offer.title)+'</strong><span class="pill off">POR VALIDAR</span></div><p>'+escValue(esc,offer.scope)+'</p><div style="font-size:13px;color:#bdd0dc">'+pieces.map(x=>'✓ '+escValue(esc,x)).join('<p style="margin:6px 0">')+'</div><p><strong>Precio de prueba:</strong> $'+Number(offer.price_estimate_mxn||0).toLocaleString('es-MX')+' MXN, estimación sin ventas ni mercado validado.</p>'));
  }
- out.push('<div class="venture-grid">'+art.join("")+'</div>');
- out.push(section("TRABAJO DE LOS DEPARTAMENTOS","DOSSIER"));
- out.push(card('<h3>Dirección · Marketing · Contenido</h3><div class="venture-memo">'+safe(esc,p.strategic_brief)+'</div>'));
- out.push(card('<h3>Ventas · Atención</h3><div class="venture-memo">'+safe(esc,p.sales_playbook)+'</div>'));
- out.push(card('<h3>Finanzas · Control</h3><div class="venture-memo">'+safe(esc,p.finance_review)+'</div>'));
- out.push('<div class="notice">Una campaña nueva cada lunes a las 9:00 a. m. (CDMX), sujeto a cuota de Gemini. Los entregables esperan tu aprobación. No se envían campañas ni ofertas sin autorización.</div>');
- if(state.ventureNotice)out.push('<div class="notice">'+safe(esc,state.ventureNotice)+'</div>');
- return out.join("");
+ out.push(section("PRIMER PROYECTO DE PORTAFOLIO","BRIEF PROFESIONAL"));
+ for(const b of briefs){
+  out.push(card('<div class="row between"><strong>'+escValue(esc,b.title)+'</strong><span class="pill off">BRIEF · SIN ASSETS FINALES</span></div><p>'+escValue(esc,b.objective)+'</p><p><strong>Audiencia:</strong> '+escValue(esc,b.audience)+'</p><p><strong>Dirección de arte:</strong> '+escValue(esc,b.visual_direction)+'</p><details><summary>Ver contrato de entregables</summary><div class="task-text">'+list(b.required_assets).map(x=>'<p>• '+escValue(esc,x)+'</p>').join('')+'</div></details><details><summary>Revisión de calidad requerida</summary><div class="task-text">'+list(b.quality_requirements).map(x=>'<p>• '+escValue(esc,x)+'</p>').join('')+'</div></details><div class="notice">Atelier Calma es una marca ficticia de muestra. No hay autorización para afirmar colaboraciones reales.</div>'));
+ }
+ out.push('<button class="btn main full" data-nav="deliverables">✦ Ver informes y diseños guardados</button>');
+ out.push('<div class="notice">Los archivos heredados de plantilla están marcados como borradores técnicos. No se venden ni presentan como nivel agencia. Las imágenes premium requieren producción, inspección visual y aprobación antes de considerarse finales.</div>');
+ if(legacy.length){
+  out.push('<details class="card"><summary style="cursor:pointer">Archivo histórico · Pilotos anteriores ('+legacy.length+')</summary><p>Los experimentos antiguos se conservan para consulta, sin mezclarse con PULSE STUDIO.</p>'+legacy.map(x=>'<p>'+escValue(esc,x.internal_name)+' · '+escValue(esc,x.status)+'</p>').join('')+'</details>');
+ }
+ if(state.ventureNotice)out.push('<div class="notice">'+escValue(esc,state.ventureNotice)+'</div>');
+ return out.join('');
 }
 window.PulseVenturePanel={render};
 })();
