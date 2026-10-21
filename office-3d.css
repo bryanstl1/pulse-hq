@@ -44,3 +44,5 @@
 @media(max-width:380px){.p3d-stage{height:400px}.p3d-summary{padding:9px 11px}.p3d-head{padding:18px 13px 8px}.p3d-metric span{font-size:8px}.p3d-tag{font-size:8px}.p3d-inspector{margin:0 9px 9px}}
 @media(min-width:650px){.p3d-stage{height:540px}.p3d-stage .p3d-fallback{grid-template-columns:repeat(5,minmax(0,1fr))}.p3d-inspector{padding:20px}.p3d-head{padding:24px 25px 10px}.p3d-summary{padding:10px 25px}}
 @media(prefers-reduced-motion:reduce){.p3d-shell *, .p3d-shell *::before,.p3d-shell *::after{animation:none!important;transition:none!important}}
+
+.p3d-stage .p3d-fallback[hidden]{display:none!important}
