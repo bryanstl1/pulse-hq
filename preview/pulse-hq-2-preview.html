@@ -118,7 +118,7 @@ let selected=2,activeTab='overview',zoom=.85,offsetX=0,offsetY=0,dragging=false,
 const pointers=new Map();let pinch=null,lastPointer=null;
 const escapeHTML=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(message){const t=el('toast');t.textContent=message;t.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('visible'),3500)}
-function styleCamera(){world.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;el('zoomLabel').textContent=`${Math.round(zoom*100)}%`}
+function styleCamera(){const b=viewport.getBoundingClientRect();const vw=b.width,vh=b.height;const sw=1120*zoom,sh=650*zoom;offsetX=sw<=vw?(vw-sw)/2:Math.max(vw-sw,Math.min(0,offsetX));offsetY=sh<=vh?(vh-sh)/2:Math.max(vh-sh,Math.min(0,offsetY));world.style.transform=`translate3d(${offsetX}px,${offsetY}px,0) scale(${zoom})`;el('zoomLabel').textContent=`${Math.round(zoom*100)}%`}
 function initialCamera(){const b=viewport.getBoundingClientRect(),mobile=b.width<600;zoom=mobile?.88:Math.min(b.width/1120,b.height/650)*1.08;zoom=Math.max(.45,Math.min(1.6,zoom));offsetX=b.width/2-560*zoom;offsetY=b.height/2-325*zoom;styleCamera()}
 function centerAt(item,z){const b=viewport.getBoundingClientRect();if(z)zoom=Math.max(.4,Math.min(2.1,z));offsetX=b.width/2-item.cx*zoom;offsetY=b.height/2-item.cy*zoom;styleCamera()}
 function changeZoom(mult,x,y){const b=viewport.getBoundingClientRect();const ax=x??b.width/2,ay=y??b.height/2;const next=Math.min(2.3,Math.max(.35,zoom*mult));offsetX=ax-(ax-offsetX)*next/zoom;offsetY=ay-(ay-offsetY)*next/zoom;zoom=next;styleCamera()}
