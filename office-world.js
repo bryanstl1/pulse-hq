@@ -54,6 +54,11 @@ function panel(raw,selected,live){
  '<div class="pw-toolbar"><div><div class="pw-welcome">Bienvenido al equipo ✨</div>'+
  '<div class="pw-welcome-note">Explora los espacios y consulta lo que están haciendo los agentes.</div></div>'+
  '<div class="pw-stats"><div class="pw-chip"><strong>10</strong> equipos</div><div class="pw-chip"><strong>'+run+'</strong> activos</div><div class="pw-chip"><strong>'+total+'</strong> tareas</div></div></div>'+
+ '<div class="pw-actions">'+
+ '<button type="button" class="pw-action pw-action-primary" data-nav="ceo">✦ Nuevo trabajo</button>'+
+ '<button type="button" class="pw-action" data-nav="tasks">▤ Mis tareas</button>'+
+ '<button type="button" class="pw-action" data-nav="approvals">✓ Por revisar</button>'+
+ '<button type="button" class="pw-action" data-nav="creative">▣ Diseños</button></div>'+
  '<div class="pw-body"><aside class="pw-sidebar" aria-label="Departamentos">'+
  '<div class="pw-side-top">TUS DEPARTAMENTOS</div><div class="pw-roster" id="pw-roster">'+roster(rooms,sel)+'</div></aside>'+
  '<div class="pw-scene-col"><div class="pw-map-head"><div class="pw-map-title">🏡 El mundo <span>12 espacios • toca un área para seleccionarla</span></div>'+
