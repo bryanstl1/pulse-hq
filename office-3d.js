@@ -144,7 +144,7 @@ function mount(input){
     const agent=new T.Group();agent.position.set(dx,.41,.86);g.add(agent);
     box(agent,.40,.45,.34,mat(tint),0,.25,0);
     orb(agent,.21,headMat,0,.69,0);
-    agents.push({obj:agent,working,offset:i+dx});
+    agents.push({obj:agent,roomIndex:i,working,offset:i+dx});
    }
    box(g,.34,.29,.34,mat(0x887c71),1.75,.25,-1.72);
    orb(g,.27,mat(0x3d8f88),1.75,.57,-1.72);
@@ -163,7 +163,7 @@ function mount(input){
  const add=(el,type,fn,opt)=>{el.addEventListener(type,fn,opt);state.events.push([el,type,fn,opt])};
  function framing(){
   const ratio=Math.max(.55,stage.clientWidth/Math.max(240,stage.clientHeight));
-  const span=Math.max(24.4,19.7/ratio)/zoom,half=span/2;
+  const span=Math.max(25.8,26.4/ratio)/zoom,half=span/2;
   camera.left=-half*ratio;camera.right=half*ratio;camera.top=half;camera.bottom=-half;
   camera.position.set(Math.sin(yaw)*34,30,Math.cos(yaw)*34);
   camera.lookAt(0,.2,0);camera.updateProjectionMatrix();
@@ -208,6 +208,28 @@ function mount(input){
  else add(window,"resize",resize);
  if(window.IntersectionObserver){state.observer=new IntersectionObserver(entries=>{inViewport=entries[0]?.isIntersecting??true;if(inViewport)draw(performance.now())},{threshold:.01});state.observer.observe(stage)}
  add(document,"visibilitychange",()=>{if(!document.hidden)draw(performance.now())});
+
+ state.updateData=(latest)=>{
+  const fresh=roomsData(latest);
+  for(let i=0;i<rooms.length;i++)Object.assign(rooms[i],fresh[i]);
+  for(const x of indicators){
+   const mode=rooms[x.index].mode;
+   x.working=mode==="running";
+   const color=mode==="running"?0x65edcb:mode==="waiting"?0xffc18a:0x829cac;
+   const glow=mode==="running"?0x39ebc9:mode==="waiting"?0xe8a565:0x305568;
+   x.material.color.setHex(color);
+   x.material.emissive.setHex(glow);
+   x.material.emissiveIntensity=mode==="running"?1.4:mode==="waiting"?.65:.15;
+  }
+  for(const x of agents)x.working=rooms[x.roomIndex].mode==="running";
+  const metrics=stage.closest(".p3d-shell")?.querySelectorAll(".p3d-metric strong");
+  if(metrics&&metrics.length===3){
+   metrics[0].textContent=String(rooms.filter(r=>r.kind==="department"&&r.mode==="running").length);
+   metrics[1].textContent=String(rooms.filter(r=>r.kind==="department"&&r.mode==="waiting").length);
+   metrics[2].textContent=String(rooms.reduce((n,r)=>n+(r.kind==="department"?r.completed:0),0));
+  }
+  showInspector();draw(performance.now());return true;
+ };
  state.reset=()=>{yaw=.51;zoom=1;framing();draw(performance.now())};
  state.select=selectRoom;
  running=state;
@@ -218,5 +240,6 @@ function mount(input){
 }
 function reset(){running?.reset?.()}
 function select(i){if(Number.isInteger(Number(i))&&Number(i)>=0&&Number(i)<12){running?.select?.(Number(i))}}
-window.PulseOffice3D={panel,mount,destroy,reset,select,version:"1.0"};
+function update(raw){return running?.updateData?.(raw)===true}
+window.PulseOffice3D={panel,mount,destroy,reset,select,update,version:"1.1"};
 })();
