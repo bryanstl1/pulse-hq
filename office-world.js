@@ -357,7 +357,25 @@ function mount(opts){
  if(!stage||!fallback)return {ok:false,reason:"not_visible"};
  const canvas=document.createElement("canvas");
  let ctx=null;try{ctx=canvas.getContext("2d",{alpha:false})}catch{}
- if(!ctx){fallback.hidden=false;return {ok:false,reason:"canvas_unavailable"}}
+ if(!ctx){
+  fallback.hidden=false;
+  const root=stage.closest(".pw-shell");
+  const rooms=normalize(opts.rooms);
+  const act=ev=>{
+    const button=ev.target.closest("[data-world-select]");
+    if(!button||!root.contains(button))return;
+    const id=Number(button.dataset.worldSelect);
+    if(!Number.isInteger(id)||id<0||id>11)return;
+    const infoEl=document.getElementById("pw-inspector");
+    if(infoEl)infoEl.innerHTML=info(rooms,id,Boolean(opts.live));
+    root.querySelectorAll("[data-world-select]").forEach(el=>el.setAttribute("aria-pressed",String(Number(el.dataset.worldSelect)===id)));
+    opts.onSelect?.(id);
+  };
+  root?.addEventListener("click",act);
+  current={handlers:root?[[root,"click",act,undefined]]:[],frame:0,canvas:null,group:null,
+    updateData(){return false},reset(){},select(id){const el=root?.querySelector('[data-world-select="'+id+'"]');el?.click?.()}};
+  return {ok:false,reason:"canvas_unavailable",fallback:true};
+ }
  canvas.className="pw-canvas";canvas.tabIndex=0;
  canvas.setAttribute("role","img");
  canvas.setAttribute("aria-label","Mapa ilustrado interactivo de PULSE HQ. Usa el listado de departamentos como alternativa accesible.");
@@ -393,8 +411,8 @@ function mount(opts){
   if(action==="zoom-in"){state.zoom=Math.min(2.2,state.zoom*1.2);redraw()}
   if(action==="zoom-out"){state.zoom=Math.max(.25,state.zoom/1.2);redraw()}
   if(action==="fit"){
-   const rect=ROOM[5];state.focusX=rect.x+WW/2;state.focusY=rect.y+HH/2;
-   state.zoom=Math.min(.75,Math.max(.18,stage.clientWidth/1450));state.offsetX=0;state.offsetY=0;redraw()
+   state.focusX=(ROOM[0].x+ROOM[11].x+WW)/2;state.focusY=(ROOM[0].y+ROOM[11].y+HH)/2;
+   state.zoom=Math.min(.75,Math.max(.18,stage.clientWidth/1750));state.offsetX=0;state.offsetY=0;redraw()
   }
  });
  let drag=null;
