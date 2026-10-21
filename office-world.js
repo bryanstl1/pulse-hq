@@ -351,7 +351,7 @@ function paint(state,now=0){
  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 function mount(opts){
- destroy();
+ cleanup();
  const stage=document.getElementById("pw-stage");
  const fallback=document.getElementById("pw-fallback");
  if(!stage||!fallback)return {ok:false,reason:"not_visible"};
