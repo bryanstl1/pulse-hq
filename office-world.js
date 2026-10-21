@@ -325,7 +325,7 @@ function drawRoom(ctx,r,idx,rooms,selected){
   ctx.save();ctx.shadowBlur=15;ctx.shadowColor="rgba(88,155,93,.48)";
   line(ctx,[...outline,outline[0]],"#61a873",3);ctx.restore();
  }
- roomLabel(ctx,r,SHORT[idx].toUpperCase(),tint,idx===selected,busy);
+ roomLabel(ctx,r,(rooms[idx]?.short||"SALA").toUpperCase(),tint,idx===selected,busy);
 }
 function paint(state,now=0){
  const {ctx,canvas,stage}=state;if(!stage.isConnected)return;
