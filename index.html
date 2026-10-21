@@ -24,10 +24,10 @@ window.PULSE_CONFIG = {
   const ACTIVE = new Set([0,1,2,3,4,5,6,7,8,9]);
   const RESEARCH = new Set([3,4,5,7]);
   const EXAMPLE = {
-    3:'Prepara un plan de prospección de marcas de música electrónica en México, con criterios para verificar patrocinios en fuentes oficiales, propuestas comerciales y datos pendientes de comprobar.',
-    4:'Prepara la investigación y una estrategia de alianzas con promotoras y festivales mexicanos. Señala dónde comprobar los datos en fuentes oficiales, sin inventar contactos.',
-    5:'Prepara un plan para verificar tres festivales de música electrónica en México, con listas de fuentes oficiales por comprobar y propuestas de colaboración sin inventar fechas.',
-    7:'Analiza oportunidades potenciales en la escena electrónica de México y prepara un plan de verificación de tendencias, noticias y posibles colaboraciones; marca hechos no confirmados.'
+    3:'Prepara una oferta de servicios y un plan de prospección B2B para negocios de belleza y wellness en México. Distingue oportunidades reales de hipótesis, propone precios de prueba y entrega un borrador de pitch sin enviarlo.',
+    4:'Diseña una estrategia de alianzas con marcas, spas y proveedores del sector bienestar, identificando criterios de selección, fuentes por verificar y borradores de acercamiento sin inventar contactos.',
+    5:'Diseña una experiencia premium de lanzamiento para una marca ficticia de wellness: recorrido del cliente, logística, riesgos, presupuesto estimado y calidad de servicio, sin inventar reservas ni proveedores.',
+    7:'Evalúa oportunidades para un estudio de branding y marketing en belleza y wellness: comprador ideal, competidores con fuentes verificables, hipótesis de precios y pruebas para validar demanda real.'
   };
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const stored = (()=>{ try{return JSON.parse(localStorage.getItem('pulse-demo-v3')||'{}')}catch{return {}}})();
