@@ -316,7 +316,7 @@ function roomLabel(ctx,r,label,tint,isSelected,busy){
 function drawRoom(ctx,r,idx,rooms,selected){
  const state=rooms[idx]?.mode||"idle",busy=state==="running";
  floor(ctx,r,idx);
- const tint=COLORS[idx];
+ const tint=rooms[idx]?.color||"#b9d6be";
  rug(ctx,r.x+.42,r.y+.38,r.w-.84,r.h-.85,tint);
  windowDecor(ctx,r);
  drawFurniture(ctx,r,idx,busy,tint);
