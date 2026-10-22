@@ -12,6 +12,8 @@ La grabación de 39.91 s de la aplicación actual muestra un espacio verde vací
 ## Propuesta artística
 Diorama empresarial cálido, vista ortográfica a 35–45 grados. Suelo de baldosas y madera, muros marfil bajos, ventanas en las paredes del fondo, acentos verde salvia, arcilla y azul tinta. Muebles GLB Kenney CC0, iluminación suave y sombras. Personajes de asset profesional, con vestuario y siluetas diferenciadas. Sin neón dominante. El espacio ocupa la pantalla y los inspectores aparecen bajo demanda.
 
+Revisión solicitada por el CEO el 21 de octubre de 2026: los agentes adoptan un pixel art detallado y expresivo, inspirado en la variedad de mascotas del ejemplo enviado. La muestra ahora propone un búho estratega, zorra creativa, robot ingeniero, personaje botánico de comunidad y personaje lunar de juntas. Son diseños originales y provisionales. El mobiliario conserva su estilo isométrico claro; se evaluará la coherencia entre pixel art y edificio antes de extenderlo a los diez departamentos.
+
 ## Edificio completo propuesto
 Ala ejecutiva: CEO, Dirección, Finanzas, juntas. Ala comercial: Marketing, Ventas, Relaciones Públicas. Ala de producción: Contenido, estudio multimedia, Eventos. Ala de operaciones: Comunidad, Inteligencia, Tecnología. Un eje central une misiones, colaboración y descanso. No se duplican habitaciones para aparentar diez áreas en esta muestra.
 

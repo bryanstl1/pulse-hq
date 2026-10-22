@@ -10,4 +10,6 @@
 | Safari iPhone, FPS y memoria | Pendientes de dispositivo real. El CSS es adaptable y el código contiene gestos y límite de DPR, pero esas propiedades aún no certifican su experiencia. |
 | Calidad visual | Las capturas muestran salas, mobiliario y personajes distinguibles; la alternativa ilustrada es más plana y menos detallada que el objetivo final. La aprobación artística del CEO y la prueba 3D real son condiciones para ampliar las diez áreas. |
 
+Revisión de personajes del 21 de octubre: se sustituyeron las apariencias visibles en la alternativa ilustrada y los retratos por cinco personajes pixel art originales. Se comprobó en navegador la escena con los cinco, se abrió la ficha de Sofía y se guardó una captura nueva. `npm run build` y `npm test` volvieron a pasar (4/4). La ruta WebGL emplea planos orientados a cámara con el mismo atlas, pero su renderizado aún no se pudo observar en este navegador.
+
 El prototipo no implementa las diez áreas, el historial de tareas, descargas, aprobación real ni conexión con Supabase. Esos componentes pertenecen a las etapas C y D, condicionadas por validación visual. No se declaró completado el control de calidad de la aplicación final.

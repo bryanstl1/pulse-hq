@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import {rooms} from './data.js';
 
 const C={base:0xebe9df,tile:0xf4f0e6,terracotta:0xe3cdbb,wood:0xbaa88e,cream:0xf5f1e9,wall:0xe8dfd1,edge:0x6d776d,glass:0xd4edf0,navy:0x405268,leaf:0x5c8a68,stone:0xd8d6ca,shadow:0xc9c5b8};
@@ -34,12 +33,11 @@ function wallShell(parent,r){const {x,z,w,d}=r;const back=z-d/2, left=x-w/2, rig
   return {x,z,w,d,front};
 }
 const furnitureNames=['desk','deskCorner','chairDesk','chairModernCushion','chairCushion','computerScreen','computerKeyboard','computerMouse','laptop','bookcaseClosedWide','bookcaseOpenLow','books','loungeSofa','loungeSofaLong','loungeChair','loungeDesignChair','loungeDesignSofa','tableRound','tableCoffeeGlassSquare','tableGlass','tableCoffee','pottedPlant','plantSmall1','plantSmall2','plantSmall3','rugRectangle','rugRound','lampRoundFloor','lampSquareTable','kitchenCoffeeMachine','sideTableDrawers','sideTable','speakerSmall','televisionModern','benchCushion','stoolBar'];
-const characterNames=[...new Set(rooms.map(r=>r.character))];
 
 export async function mountWorld(container,{onRoom,onAgent,onReady,onProgress,onError}){
  let renderer,scene,camera,stage=new THREE.Group(),destroyed=false,frame=0;
  roomG.length=0;agentPicks.length=0;
- const eventHandlers=[],loaded=new Map(),charLoaded=new Map(),mixers=[];
+ const eventHandlers=[],loaded=new Map();let atlas;
  const add=(el,type,fn,opt)=>{el.addEventListener(type,fn,opt);eventHandlers.push([el,type,fn,opt])};
  const pointer={x:0,y:0},ray=new THREE.Raycaster();const cameraTarget=new THREE.Vector3(0,0,0);
  try{renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance',alpha:false});renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.55;renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.6));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setClearColor(0xe9e5dd);container.append(renderer.domElement);}catch(e){onError?.(e);return {ok:false,destroy(){}}}
@@ -54,11 +52,13 @@ export async function mountWorld(container,{onRoom,onAgent,onReady,onProgress,on
  for(let i=-8;i<9;i++)box(stage,i*1.65,-.235,2.1,.018,.01,9.8,0xc0bdae);
  for(const r of rooms)wallShell(stage,r);
  function loader(url){return new Promise((resolve,reject)=>new GLTFLoader().load(url,resolve,undefined,reject))}
- const names=[...furnitureNames,...characterNames];let done=0;
- await Promise.all(names.map(async name=>{
-   try{const char=name.startsWith('character-');const file=`./assets/${char?'characters':'furniture'}/${name}.glb`;let gltf=await loader(file);(char?charLoaded:loaded).set(name,gltf)}catch(e){console.warn('Asset no cargado:',name,e)}
-   done++;onProgress?.(done,names.length);
- }));
+ const names=furnitureNames;let done=0,total=names.length+1;
+ await Promise.all([...names.map(async name=>{
+   try{loaded.set(name,await loader(`./assets/furniture/${name}.glb`))}catch(e){console.warn('Asset no cargado:',name,e)}
+   done++;onProgress?.(done,total);
+ }),new Promise(resolve=>{
+   new THREE.TextureLoader().load('./assets/characters/pulse-agents-pixel-atlas-v1.webp',texture=>{atlas=texture;atlas.colorSpace=THREE.SRGBColorSpace;atlas.magFilter=THREE.NearestFilter;done++;onProgress?.(done,total);resolve()},undefined,e=>{console.warn('Atlas de agentes no cargado',e);done++;onProgress?.(done,total);resolve()});
+ })]);
  if(destroyed)return {ok:false,destroy(){}};
  function prop(name,x,z,width,rotation=0,opts={}){const gltf=loaded.get(name);if(!gltf)return;
    let root=gltf.scene.clone(true);const bounds=new THREE.Box3().setFromObject(root),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3());let scale=width/Math.max(.1,size.x);root.scale.setScalar(scale);root.position.set(x-center.x*scale,(opts.y||0)-bounds.min.y*scale,z-center.z*scale);root.rotation.y=rotation;
@@ -77,18 +77,12 @@ export async function mountWorld(container,{onRoom,onAgent,onReady,onProgress,on
  carpet(stage,6.2,5.3,7.8,4.65,0xd2c9bf);prop('tableGlass',6.25,5.55,3.65);for(const x of [4.25,6.25,8.25])for(const z of [3.93,7.1])prop('chairModernCushion',x,z,.79,z<5.5?0:Math.PI);prop('televisionModern',6.1,2.66,1.45,0,{y:.5});prop('bookcaseClosedWide',10.2,2.75,1.7);prop('plantSmall1',1.55,2.95,.72);prop('pottedPlant',10.55,7.45,.85);
  // Thresholds and circulation spaces read as one connected building.
  for(const x of [-12.55,12.55])for(const z of [-.4,1.55])prop('pottedPlant',x,z,.78);
- const labels=[];
  for(const r of rooms){
-  const gltf=charLoaded.get(r.character);if(!gltf)continue;
-  const body=SkeletonUtils.clone(gltf.scene),bound=new THREE.Box3().setFromObject(body),size=bound.getSize(new THREE.Vector3()),center=bound.getCenter(new THREE.Vector3());const k=1.6/Math.max(size.y,.1);body.scale.setScalar(k);
-  const [x,z]=r.position;body.position.set(x-center.x*k,-bound.min.y*k+.03,z-center.z*k);body.rotation.y=2.65;
-  body.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});stage.add(body);
-  const hit=new THREE.Mesh(new THREE.CylinderGeometry(.65,.65,1.75,10),new THREE.MeshBasicMaterial({visible:false}));hit.position.set(x,.9,z);hit.userData={agent:r.id};stage.add(hit);agentPicks.push(hit);
-  const halo=new THREE.Mesh(new THREE.RingGeometry(.62,.69,24),new THREE.MeshBasicMaterial({color:0x87a996,side:THREE.DoubleSide,transparent:true,opacity:.7}));halo.rotation.x=-Math.PI/2;halo.position.set(x,.085,z);stage.add(halo);labels.push(halo);
-  if(gltf.animations.length){const mixer=new THREE.AnimationMixer(body),idle=gltf.animations.find(a=>/idle/i.test(a.name))||gltf.animations[0];mixer.clipAction(idle).play();mixers.push(mixer)}
+  const [x,z]=r.position;
+  if(atlas){const tile=atlas.clone();tile.repeat.set(.2,1);tile.offset.set(r.sprite*.2,0);tile.needsUpdate=true;const body=new THREE.Sprite(new THREE.SpriteMaterial({map:tile,transparent:true,alphaTest:.035,depthWrite:false}));body.scale.set(1.58,2.62,1);body.position.set(x,1.31,z);stage.add(body);}
+  const hit=new THREE.Mesh(new THREE.CylinderGeometry(.75,.75,2.5,10),new THREE.MeshBasicMaterial({visible:false}));hit.position.set(x,1.25,z);hit.userData={agent:r.id};stage.add(hit);agentPicks.push(hit);
+  const halo=new THREE.Mesh(new THREE.RingGeometry(.62,.69,24),new THREE.MeshBasicMaterial({color:0x87a996,side:THREE.DoubleSide,transparent:true,opacity:.7}));halo.rotation.x=-Math.PI/2;halo.position.set(x,.085,z);stage.add(halo);
  }
- const clock=new THREE.Clock(),reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
- const loop=()=>{if(destroyed)return; if(!document.hidden&&mixers.length&&!reduced){let delta=Math.min(.04,clock.getDelta());mixers.forEach(m=>m.update(delta));invalidate()}requestAnimationFrame(loop)};if(mixers.length&&!reduced)requestAnimationFrame(loop);
  let down=null,pinchDist=0,pointers=new Map();
  add(renderer.domElement,'webglcontextlost',e=>{e.preventDefault();if(!destroyed)onError?.(new Error('WebGL context lost'))});
  function screenPos(e){const rect=container.getBoundingClientRect();pointer.x=(e.clientX-rect.left)/rect.width*2-1;pointer.y=-(e.clientY-rect.top)/rect.height*2+1;ray.setFromCamera(new THREE.Vector2(pointer.x,pointer.y),camera)}
