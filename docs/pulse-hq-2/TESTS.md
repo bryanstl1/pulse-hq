@@ -17,3 +17,11 @@ Revisión de navegación móvil: en una vista compacta de 390 × 844 px del nave
 Pulido de salas: se sustituyó el recorte del mapa compartido en móvil por cinco escenas ilustradas individuales y se comprobaron visualmente Dirección, Estudio, Tecnología, Encuentro y Juntas en el navegador. La revisión detectó que la transformación de escala de una sala inactiva alteraba el cálculo de anchura y desplazaba las salas posteriores; ahora se usa el ancho de diseño para centrar cada una. El módulo 3D se carga solo en escritorio. La diferencia estética entre los agentes pixel art y la ilustración pintada queda abierta a la valoración del CEO.
 
 El prototipo no implementa las diez áreas, el historial de tareas, descargas, aprobación real ni conexión con Supabase. Esos componentes pertenecen a las etapas C y D, condicionadas por validación visual. No se declaró completado el control de calidad de la aplicación final.
+
+## Expansión móvil posterior a la aprobación visual
+
+El catálogo móvil ahora muestra diez departamentos y seis espacios especiales; el edificio de escritorio mantiene cinco ambientes. `npm run build` terminó con Vite 7.1.12: módulo principal 24,83 kB bruto / 9,43 kB gzip y módulo 3D separado 586,79 kB bruto / 152,03 kB gzip. `npm test` pasó 4/4, centrado en no atribuir ejecuciones ficticias. La carpeta `dist` mide aproximadamente 5,5 MB, con dieciséis imágenes de sala y los atlas de personajes.
+
+Se abrió el navegador en una vista móvil de 390 × 844 px. Se inspeccionaron Dirección, Marketing, Finanzas, oficina del CEO, colaboración y descanso. Las imágenes completas se renderizaron, el selector saltó a las salas 02/16, 09/16, 11/16 y 16/16, y la ficha de Marketing mostró el retrato y la indicación «Sin conexión / No consultada». Se guardaron capturas reales de Marketing, oficina del CEO y descanso. La transición horizontal funciona mediante indicadores y flechas; la verificación de gesto táctil en Safari físico, FPS y memoria permanece pendiente.
+
+El catálogo es visual: las diez apariencias no están vinculadas aún a contratos ni registros de agentes existentes. La conectividad de Supabase, las aprobaciones, los entregables y la persistencia no se han probado en esta expansión. El texto anterior sobre ausencia de diez áreas corresponde a la etapa B inicial y queda supersedido solo para el catálogo visual móvil.
