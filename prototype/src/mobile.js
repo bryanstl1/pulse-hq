@@ -39,5 +39,11 @@ export function mountMobileDepartments(container,{onRoom,onAgent}){
  const observer=new ResizeObserver(()=>{if(!destroyed)layout()});observer.observe(windowEl);
  windowEl.addEventListener('pointerdown',pointerDown);windowEl.addEventListener('pointermove',pointerMove);windowEl.addEventListener('pointerup',pointerEnd);windowEl.addEventListener('pointercancel',pointerEnd);deck.addEventListener('click',click);deck.addEventListener('keydown',key);
  layout();select(0,false);
- return {ok:true,focus(id){const i=rooms.findIndex(r=>r.id===id);if(i>=0)select(i)},reset(){select(0)},zoom(){},destroy(){destroyed=true;clearTimeout(swipeTimer);observer.disconnect();windowEl.removeEventListener('pointerdown',pointerDown);windowEl.removeEventListener('pointermove',pointerMove);windowEl.removeEventListener('pointerup',pointerEnd);windowEl.removeEventListener('pointercancel',pointerEnd);deck.removeEventListener('click',click);deck.removeEventListener('keydown',key);deck.remove()}};
+ return {ok:true,focus(id){const i=rooms.findIndex(r=>r.id===id);if(i>=0)select(i)},reset(){select(0)},zoom(){},updateActivity(getActivity){
+  deck.querySelectorAll('.mobile-room-agent').forEach(button=>{
+   const room=rooms.find(r=>r.id===button.dataset.agent),activity=room&&getActivity?.(room.name);
+   button.dataset.state=activity?.kind||'unconnected';
+   button.title=activity?.label||'Actividad no consultada';
+  });
+ },destroy(){destroyed=true;clearTimeout(swipeTimer);observer.disconnect();windowEl.removeEventListener('pointerdown',pointerDown);windowEl.removeEventListener('pointermove',pointerMove);windowEl.removeEventListener('pointerup',pointerEnd);windowEl.removeEventListener('pointercancel',pointerEnd);deck.removeEventListener('click',click);deck.removeEventListener('keydown',key);deck.remove()}};
 }

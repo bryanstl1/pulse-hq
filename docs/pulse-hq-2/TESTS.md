@@ -29,3 +29,11 @@ El catálogo es visual: las diez apariencias no están vinculadas aún a contrat
 ## Revisión de pantalla completa
 
 Tras la observación del CEO de que la sala se veía como tarjeta, se eliminó el marco móvil: cada imagen ocupa el viewport de la aplicación y los controles se superponen. Se revisaron Dirección y Marketing en el navegador con una vista de 390 × 844 px, incluida la transición 01/16 → 02/16 y la lectura del título sobre la imagen. `npm run build` y `npm test` pasaron (4/4). La interfaz propia del visor de ChatGPT que aparece fuera de la página en el iPhone no forma parte de PULSE HQ.
+
+## Integración del avatar y motor empresarial (22 de octubre de 2026)
+
+`npm run build` terminó correctamente: Vite empaquetó 60 módulos; JS principal 262,44 kB / 73,13 kB gzip, módulo 3D separado 586,79 kB / 152,02 kB gzip. `npm test` pasó 8/8: cuatro pruebas de estados previas y cuatro nuevas sobre ausencia de ejecución sin sesión, llamada exacta a `pulse-run`, rechazo de aprobación concurrente y escape de datos del servidor.
+
+Se inspeccionó el esquema real de seis tablas de Supabase mediante consulta de solo lectura y se compararon columnas con las consultas nuevas. Se abrió la vista móvil local en navegador; tocar a Valeria abrió el panel de agente con estado «Actividad no consultada» y acceso del CEO; la pestaña Misiones mostró el acceso sin registros ficticios. Las capturas son del navegador. No se envió correo mágico, no se ejecutó Gemini ni se mutó dato empresarial; el flujo autenticado necesita URL de retorno permitida en Supabase Auth. Safari físico, medición de memoria y comportamiento real de Edge quedan pendientes.
+
+El estado `running` solo mueve visualmente al personaje si hay un registro reciente del servidor. El centro empresarial anterior sigue disponible para las capacidades que faltan en el nuevo panel. No se tocó GitHub Pages ni el código de las funciones desplegadas.

@@ -78,3 +78,34 @@ html.mobile-experience .inspector{z-index:35;bottom:0;height:min(67dvh,570px);bo
 html.mobile-experience .mobile-deck:before{content:'';position:absolute;top:0;left:0;right:0;height:205px;z-index:5;pointer-events:none;background:linear-gradient(#f5f1eaf5 0%,#f5f1eacc 45%,#f5f1ea00 100%)}
 html.mobile-experience .mobile-room-agent{width:105px;height:165px}
 html.mobile-experience .mobile-room-agent .sprite-cell{width:88px;height:147px}
+
+/* Enterprise panels share the office's visual language and display only server records. */
+.inspector-body label{display:block;color:#526f5e;font:800 10px 'Manrope',sans-serif;letter-spacing:.06em;margin:15px 0 7px}
+.inspector-body input,.inspector-body textarea{display:block;width:100%;border:1px solid #ccd9cc;background:#fff;border-radius:11px;padding:12px;color:#263e33;font:13px 'DM Sans',sans-serif;outline:none}
+.inspector-body textarea{min-height:112px;resize:vertical;line-height:1.5}
+.inspector-body input:focus,.inspector-body textarea:focus{border-color:#4b8261;box-shadow:0 0 0 3px #85b69830}
+.live-connected,.live-disconnected{font:800 9px 'Manrope',sans-serif;letter-spacing:.08em;margin:0 40px 18px 0;color:#4e8061}
+.live-disconnected{color:#8d997c}
+.live-error{padding:11px 13px;background:#fff1e9;border:1px solid #d9a080;border-radius:10px;color:#854b36;font-size:12px;line-height:1.5;margin:12px 0}
+.live-card{background:#f6f7f1;border:1px solid #e0e6db;border-radius:15px;padding:15px;margin:12px 0}
+.live-card h3,.live-section{color:#365343;font:800 14px 'Manrope',sans-serif;margin:3px 0 11px}
+.live-card p{margin:7px 0;font-size:12px;line-height:1.55}
+.live-card small{font-size:10px;color:#6f8875}
+.live-card .primary{margin-top:13px}
+.live-note{font-size:10px!important;color:#849989!important;line-height:1.5!important;margin:12px 0!important}
+.live-state{display:flex;align-items:center;gap:8px;font:800 11px 'Manrope',sans-serif;color:#557463}
+.live-state i{width:9px;height:9px;border-radius:50%;background:#a1afa5}
+.live-state.running i{background:#2a9963;box-shadow:0 0 0 4px #4cb87c33}
+.live-state.review i{background:#db9a45}
+.live-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border:1px solid #e2e8de;border-radius:12px;background:#fbfcf8;padding:12px;margin:7px 0;color:#32513e}
+.live-row span{min-width:0}.live-row b{display:block;font:800 12px/1.4 'Manrope',sans-serif;max-height:3em;overflow:hidden}.live-row small{display:block;margin-top:5px;color:#849787;font-size:10px}.live-row em{font-style:normal;font-size:17px;flex:none}
+.live-card .live-row{border:0;background:none;margin:0;padding:1px}
+.live-result{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.65;color:#40584a;max-height:52dvh;overflow-y:auto}
+.live-step{border-top:1px solid #e0e7dd;padding:11px 0;display:grid;gap:4px;font-size:11px}.live-step small{color:#718b77}
+.live-actions{display:flex;flex-wrap:wrap;gap:8px;margin:13px 0}.live-actions button,.live-link{border:1px solid #c6d8c8;border-radius:10px;background:#ecf3eb;color:#365e43;padding:10px 12px;font:800 11px 'Manrope',sans-serif;min-height:42px;text-align:left}
+.live-link{margin:8px 0;display:inline-block}.live-external{display:block;text-decoration:none;color:white!important}
+.live-download{display:block;margin:4px 0 13px;padding:9px;border-radius:9px;background:#e5f2e5;color:#305b40;font-size:11px}
+.mobile-room-agent[data-state="running"] .sprite-cell{animation:agent-work 1.8s ease-in-out infinite alternate}
+.mobile-room-agent[data-state="review"] b:after{content:' · !';color:#ffd592}
+@keyframes agent-work{to{transform:translateY(-5px)}}
+@media(prefers-reduced-motion:reduce){.mobile-room-agent[data-state="running"] .sprite-cell{animation:none}}
