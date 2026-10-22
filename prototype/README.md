@@ -20,5 +20,6 @@ Abre la dirección local que imprima Vite, normalmente `http://localhost:5173/`.
 - `pulse-agents-pixel-atlas-v1.webp`: cinco personajes originales de pixel art generados para esta dirección visual, inspirados en la variedad y acabado de la referencia aportada por el CEO. No reproducen personajes ni marcas de la captura. Se usan en la oficina y en las fichas; no representan actividad real.
 - [Kenney Mini Characters](https://kenney.nl/assets/mini-characters): recursos de exploración anterior conservados en la rama, actualmente no cargados por la interfaz. Licencia CC0; copia en `public/assets/characters/LICENSE-KENNEY.txt`.
 - `office-map.webp` se compuso a partir de las vistas de Furniture Kit y recursos dibujados para esta muestra. No contiene datos de producción.
+- `public/assets/mobile-rooms/*.webp`: cinco habitaciones originales generadas con la herramienta integrada de imágenes para esta muestra y optimizadas a WebP (aprox. 600 kB en conjunto). Cada sala tiene mobiliario propio; los personajes se superponen como elementos interactivos. No contienen datos empresariales.
 
 La decisión visual y los criterios figuran en `../docs/pulse-hq-2/DESIGN.md`; la auditoría, integración y resultados están en el mismo directorio. Esta rama no se fusiona ni se publica en GitHub Pages hasta la aprobación del CEO.

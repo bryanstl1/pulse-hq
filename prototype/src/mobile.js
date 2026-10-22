@@ -1,29 +1,25 @@
 import {rooms} from './data.js';
 
-const W=2200,H=1250,GAP=12;
-const xy=(x,z)=>[1100+(x-z)*42,616+(x+z)*21];
+const GAP=12;
+const agentSpots={direction:[52,69],creative:[49,73],technology:[51,72],lounge:[54,75],boardroom:[51,78]};
 const escapeText=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-/** A mobile-first room navigator. It uses the same illustrated building as desktop,
- * but gives each department a full scene and keeps all movement local to the preview. */
+/** Mobile room navigator. Each room has dedicated artwork; no server activity is implied. */
 export function mountMobileDepartments(container,{onRoom,onAgent}){
  const deck=document.createElement('div');deck.className='mobile-deck';
  deck.innerHTML=`<div class="mobile-deck-heading"><div class="mobile-deck-eyebrow">PULSE HQ <span> / </span> RECORRE TU COMPAÑÍA</div><div class="mobile-deck-count" id="mobile-room-count"></div><h1 id="mobile-room-heading"></h1><p id="mobile-room-subtitle"></p></div>
- <div class="mobile-stage-viewport" aria-label="Departamentos de la oficina"><div class="mobile-stage-track">${rooms.map((r,i)=>`<article class="mobile-room-stage" data-slide="${i}" style="--accent:${r.accent}" aria-label="${escapeText(r.name)}"><div class="mobile-room-art"><img src="./assets/office-map.webp" alt="" draggable="false"></div><button class="mobile-room-agent" data-agent="${r.id}" aria-label="Conocer a ${escapeText(r.agent)}" style="--sprite-pos:${r.sprite*25}%"><span class="sprite-cell" aria-hidden="true"></span><b>${escapeText(r.agent)}</b></button><div class="mobile-room-footer"><div><small>${String(i+1).padStart(2,'0')} / ${String(rooms.length).padStart(2,'0')} · ${escapeText(r.sub)}</small><strong>${escapeText(r.short)}</strong></div><button data-room="${r.id}" aria-label="Abrir ${escapeText(r.name)}">↗</button></div></article>`).join('')}</div></div>
+ <div class="mobile-stage-viewport" aria-label="Departamentos de la oficina"><div class="mobile-stage-track">${rooms.map((r,i)=>`<article class="mobile-room-stage" data-slide="${i}" style="--accent:${r.accent}" aria-label="${escapeText(r.name)}"><div class="mobile-room-art"><img src="./assets/mobile-rooms/${r.id}.webp" alt="" draggable="false"></div><button class="mobile-room-agent" data-agent="${r.id}" aria-label="Conocer a ${escapeText(r.agent)}" style="--sprite-pos:${r.sprite*25}%;--agent-x:${agentSpots[r.id][0]}%;--agent-y:${agentSpots[r.id][1]}%"><span class="sprite-cell" aria-hidden="true"></span><b>${escapeText(r.agent)}</b></button><div class="mobile-room-footer"><div><small>${String(i+1).padStart(2,'0')} / ${String(rooms.length).padStart(2,'0')} · ${escapeText(r.sub)}</small><strong>${escapeText(r.short)}</strong></div><button data-room="${r.id}" aria-label="Abrir ${escapeText(r.name)}">↗</button></div></article>`).join('')}</div></div>
  <div class="mobile-deck-controls"><button data-move="-1" aria-label="Departamento anterior">←</button><div class="mobile-deck-dots" aria-label="Seleccionar departamento">${rooms.map((r,i)=>`<button data-index="${i}" aria-label="Ir a ${escapeText(r.name)}"></button>`).join('')}</div><button data-move="1" aria-label="Departamento siguiente">→</button></div><div class="mobile-deck-hint">DESLIZA A LOS LADOS PARA CAMBIAR DE ESPACIO</div>`;
  container.append(deck);
  const windowEl=deck.querySelector('.mobile-stage-viewport'),track=deck.querySelector('.mobile-stage-track');
  const slides=[...deck.querySelectorAll('.mobile-room-stage')];let index=0,drag=null,destroyed=false,swiped=false,swipeTimer;
  function layout(){
-  const w=windowEl.clientWidth,h=windowEl.clientHeight,cardW=Math.min(460,Math.max(260,w-46)),scale=Math.min(.69,(cardW-28)/610);
-  slides.forEach((slide,i)=>{const r=rooms[i],art=slide.querySelector('img'),agent=slide.querySelector('.mobile-room-agent');const [cx,cy]=xy(r.x,r.z),[ax,ay]=xy(...r.position);
-   slide.style.width=`${cardW}px`;art.style.width=`${W*scale}px`;art.style.height=`${H*scale}px`;art.style.left=`${cardW/2-cx*scale}px`;art.style.top=`${h*.43-cy*scale}px`;
-   agent.style.left=`${cardW/2+(ax-cx)*scale}px`;agent.style.top=`${h*.43+(ay-cy)*scale}px`;
-  });
+  const w=windowEl.clientWidth,cardW=Math.min(460,Math.max(260,w-46));
+  slides.forEach(slide=>{slide.style.width=`${cardW}px`});
   track.style.gap=`${GAP}px`;position(false);
  }
  function position(animated=true,dragX=0){
-  const cardW=slides[0].getBoundingClientRect().width,w=windowEl.clientWidth;
+  const cardW=slides[0].offsetWidth,w=windowEl.clientWidth;
   track.style.transition=animated&&!matchMedia('(prefers-reduced-motion: reduce)').matches?'transform 520ms cubic-bezier(.22,1,.36,1)':'none';
   track.style.transform=`translate3d(${(w-cardW)/2-index*(cardW+GAP)+dragX}px,0,0)`;
  }

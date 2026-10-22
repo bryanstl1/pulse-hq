@@ -1,5 +1,4 @@
 import {rooms,byId,DEMO_LABEL} from './data.js';
-import {mountWorld} from './world.js';
 import {mountIllustrated} from './fallback.js';
 import {mountMobileDepartments} from './mobile.js';
 import './style.css';
@@ -29,6 +28,7 @@ function openOverview(kind){selected=null;inspect=kind;updatePressed();if(kind==
 async function init(){loading.hidden=false;fallback.hidden=true;world?.destroy();world=null;let graphicsFailed=false;
  if(matchMedia('(max-width:600px)').matches||mobilePreview){world=mountMobileDepartments(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true)});loading.hidden=true;return}
  const showIllustrated=()=>{if(world?.illustrated)return;world?.destroy();world=mountIllustrated(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true)});world.illustrated=true;loading.hidden=true;document.getElementById('scene-note').textContent='OFICINA ILUSTRADA · MUESTRA SIN CONEXIÓN'};
+ let mountWorld;try{({mountWorld}=await import('./world.js'))}catch(e){console.warn('No se pudo cargar la escena 3D',e);showIllustrated();return}
  world=await mountWorld(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true),onProgress:(done,total)=>{document.getElementById('loadBar').style.width=`${Math.round(done/total*100)}%`;document.getElementById('loadText').textContent=`${done} / ${total} recursos`},onReady:()=>{loading.hidden=true},onError:(e)=>{console.warn('WebGL no disponible; se muestra la oficina ilustrada',e);graphicsFailed=true;queueMicrotask(()=>{if(world?.ok&&!world.illustrated)showIllustrated()})}});
  if(graphicsFailed||!world?.ok)showIllustrated()}
 app.addEventListener('click',e=>{let r=e.target.closest('[data-room]');if(r){inspectRoom(r.dataset.room);return}let a=e.target.closest('[data-agent]');if(a){inspectRoom(a.dataset.agent,true);return}let tab=e.target.closest('[data-tab]');if(tab){activeTab=tab.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('selected',x.dataset.tab===activeTab));if(activeTab==='spaces'){inspector.hidden=true;world?.reset()}else openOverview(activeTab);return}let c=e.target.closest('[data-control]');if(c){c.dataset.control==='reset'?world?.reset():world?.zoom(c.dataset.control==='plus'?1:-1);return}let action=e.target.closest('[data-action]')?.dataset.action;if(action==='close'){inspector.hidden=true;return}if(action==='agent'&&selected)inspectRoom(selected,true);if(action==='about'&&selected)inspectRoom(selected);if(action==='retry')init()});

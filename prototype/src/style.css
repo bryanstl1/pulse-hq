@@ -21,9 +21,9 @@
 .mobile-stage-track{position:absolute;left:0;top:0;height:100%;display:flex;will-change:transform}
 .mobile-room-stage{position:relative;height:100%;overflow:hidden;flex:none;border:1px solid #d8ddd0;border-radius:21px;background:#f9f6ee;box-shadow:0 15px 32px #43544524,0 2px 6px #43544512;opacity:.67;transform:scale(.95);transition:opacity .35s,transform .5s;isolation:isolate}
 .mobile-room-stage.active{opacity:1;transform:scale(1)}.mobile-room-art{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 50% 48%,#f8f3e7,#eee9dc)}
-.mobile-room-art img{position:absolute;max-width:none;pointer-events:none;user-select:none;image-rendering:auto}
+.mobile-room-art img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;pointer-events:none;user-select:none;image-rendering:auto}
 .mobile-room-stage:after{content:'';position:absolute;inset:auto 0 0;height:110px;background:linear-gradient(transparent,#fffdf5 62%);pointer-events:none;z-index:1}
-.mobile-room-agent{position:absolute;z-index:2;transform:translate(-50%,-64%);width:85px;height:137px;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;border:0;background:none;filter:drop-shadow(0 5px 4px #3b473f65)}
+.mobile-room-agent{position:absolute;z-index:2;top:var(--agent-y);left:var(--agent-x);transform:translate(-50%,-64%);width:85px;height:137px;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;border:0;background:none;filter:drop-shadow(0 5px 4px #3b473f65)}
 .mobile-room-agent .sprite-cell{width:72px;height:120px}.mobile-room-agent b{position:relative;margin-top:-11px;background:#2d463a;color:#fff;border-radius:13px;padding:4px 9px;font:800 10px 'Manrope',sans-serif}
 .mobile-room-footer{position:absolute;bottom:10px;left:13px;right:13px;z-index:3;display:flex;align-items:end;justify-content:space-between;gap:8px;color:#324c3e}
 .mobile-room-footer small{display:block;font:800 8px 'Manrope',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a9d8c}.mobile-room-footer strong{display:block;font:800 17px 'Manrope',sans-serif;letter-spacing:-.05em;margin-top:3px}
