@@ -9,3 +9,30 @@
 .map-agent:hover .sprite-cell{transform:translateY(-4px)}
 .person-portrait{width:144px;height:178px;background:linear-gradient(145deg,#fff8ed,color-mix(in srgb,var(--accent) 35%,#fff8ed));border-radius:23px}
 .person-portrait .sprite-cell{width:105px;height:176px;filter:drop-shadow(0 7px 5px #34453c38)}
+
+/* One furnished office per mobile screen. Adjacent rooms remain visible at the edges. */
+.mobile-deck{display:none;position:absolute;inset:0;z-index:5;background:radial-gradient(circle at 50% 43%,#f8f5ed,#e7e2d7 76%);overflow:hidden}
+.mobile-deck-heading{position:absolute;top:22px;left:21px;right:21px;color:#30473d;z-index:2;pointer-events:none}
+.mobile-deck-eyebrow{font:800 9px 'Manrope',sans-serif;letter-spacing:.17em;color:#71917c}.mobile-deck-eyebrow span{color:#b8c6b9;margin:0 5px}
+.mobile-deck-count{position:absolute;right:1px;top:0;font:800 10px 'Manrope',sans-serif;letter-spacing:.12em;color:#9dac9e}
+.mobile-deck-heading h1{font:800 clamp(23px,6.4vw,30px)/1.1 'Manrope',sans-serif;letter-spacing:-.06em;margin:12px 0 3px;max-width:300px}
+.mobile-deck-heading p{font-size:11px;color:#8a988a;margin:0}
+.mobile-stage-viewport{position:absolute;top:139px;bottom:97px;left:0;right:0;overflow:hidden;touch-action:pan-y}
+.mobile-stage-track{position:absolute;left:0;top:0;height:100%;display:flex;will-change:transform}
+.mobile-room-stage{position:relative;height:100%;overflow:hidden;flex:none;border:1px solid #d8ddd0;border-radius:21px;background:#f9f6ee;box-shadow:0 15px 32px #43544524,0 2px 6px #43544512;opacity:.67;transform:scale(.95);transition:opacity .35s,transform .5s;isolation:isolate}
+.mobile-room-stage.active{opacity:1;transform:scale(1)}.mobile-room-art{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 50% 48%,#f8f3e7,#eee9dc)}
+.mobile-room-art img{position:absolute;max-width:none;pointer-events:none;user-select:none;image-rendering:auto}
+.mobile-room-stage:after{content:'';position:absolute;inset:auto 0 0;height:110px;background:linear-gradient(transparent,#fffdf5 62%);pointer-events:none;z-index:1}
+.mobile-room-agent{position:absolute;z-index:2;transform:translate(-50%,-64%);width:85px;height:137px;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;border:0;background:none;filter:drop-shadow(0 5px 4px #3b473f65)}
+.mobile-room-agent .sprite-cell{width:72px;height:120px}.mobile-room-agent b{position:relative;margin-top:-11px;background:#2d463a;color:#fff;border-radius:13px;padding:4px 9px;font:800 10px 'Manrope',sans-serif}
+.mobile-room-footer{position:absolute;bottom:10px;left:13px;right:13px;z-index:3;display:flex;align-items:end;justify-content:space-between;gap:8px;color:#324c3e}
+.mobile-room-footer small{display:block;font:800 8px 'Manrope',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8a9d8c}.mobile-room-footer strong{display:block;font:800 17px 'Manrope',sans-serif;letter-spacing:-.05em;margin-top:3px}
+.mobile-room-footer button{width:37px;height:37px;border:0;border-radius:11px;background:#315a44;color:#fff;font-size:20px;flex:none}
+.mobile-deck-controls{position:absolute;bottom:49px;left:20px;right:20px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.mobile-deck-controls>button{border:1px solid #d4dfd3;background:#fffdf7;color:#416c4f;border-radius:12px;width:39px;height:39px;font-size:21px}.mobile-deck-controls>button:disabled{opacity:.35}
+.mobile-deck-dots{display:flex;align-items:center;justify-content:center;gap:7px;flex:1}.mobile-deck-dots button{width:7px;height:7px;border:0;border-radius:9px;padding:0;background:#c4d1c4;transition:width .3s,background .3s}.mobile-deck-dots button.active{width:24px;background:#427656}
+.mobile-deck-hint{position:absolute;bottom:19px;left:0;right:0;text-align:center;font:800 8px 'Manrope',sans-serif;letter-spacing:.12em;color:#9aa99b}
+.workspace{position:relative}
+@media(max-width:600px){.mobile-deck{display:block}.viewer-heading,.scene-note,.view-tools,.rooms-strip,.instructions{display:none}.inspector{top:auto;bottom:0;right:0;width:100%;height:min(60dvh,530px);border-radius:22px 22px 0 0;box-shadow:0 -18px 55px #263f3d30}.inspector-body{padding:31px 24px 45px}}
+/* Browser review at desktop width, rendering exactly the compact layout. */
+@media(min-width:601px){html.mobile-preview{background:#d1d9d0}html.mobile-preview #app{width:390px;height:min(844px,100dvh);margin:auto;box-shadow:0 0 55px #203a2e36}html.mobile-preview .mast{height:58px;padding:0 15px}html.mobile-preview .brand{min-width:0}html.mobile-preview .brand b{font-size:13px}html.mobile-preview .brand small{font-size:7px}html.mobile-preview .top-center,html.mobile-preview .rail,html.mobile-preview .viewer-heading,html.mobile-preview .scene-note,html.mobile-preview .view-tools,html.mobile-preview .rooms-strip,html.mobile-preview .instructions{display:none}html.mobile-preview .demo-pill{font-size:8px;padding:7px 9px}html.mobile-preview .main{height:100%}html.mobile-preview .mobile-deck{display:block}html.mobile-preview .mobile-nav{display:flex;height:65px;flex:none;background:#fffdf8;border-top:1px solid #e3e5da;justify-content:space-around;align-items:center}html.mobile-preview .mobile-nav button{height:54px;min-width:70px;border:0;background:none;color:#95a195;font:25px Georgia,serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}html.mobile-preview .mobile-nav button.selected{color:#397054}html.mobile-preview .mobile-nav small{font:700 9px 'Manrope',sans-serif}html.mobile-preview .inspector{position:absolute;top:auto;bottom:0;right:0;width:100%;height:min(60dvh,530px);border-radius:22px 22px 0 0}}

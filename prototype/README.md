@@ -1,6 +1,6 @@
 # PULSE HQ 2.0 — muestra visual aislada
 
-Esta aplicación permite recorrer cinco ambientes amueblados, abrir fichas de habitaciones y personajes, desplazar y acercar la cámara, y ver una explicación de cómo se visualizarían misiones. Es una muestra **sin conexión al servidor**: no consulta ni modifica tareas, misiones, aprobaciones o agentes reales. Los nombres de los personajes son provisionales.
+Esta aplicación permite recorrer cinco ambientes amueblados, abrir fichas de habitaciones y personajes, y ver una explicación de cómo se visualizarían misiones. En móvil presenta un ambiente por pantalla: desliza a izquierda o derecha, usa las flechas o toca los indicadores para cambiar de sala. En escritorio conserva la cámara libre con desplazamiento y zoom. Es una muestra **sin conexión al servidor**: no consulta ni modifica tareas, misiones, aprobaciones o agentes reales. Los nombres de los personajes son provisionales.
 
 ## Ejecutar
 
@@ -10,7 +10,7 @@ npm ci
 npm run dev
 ```
 
-Abre la dirección local que imprima Vite, normalmente `http://localhost:5173/`. Para revisar desde un iPhone en la misma red, ejecuta el servidor en una computadora con `npm run dev -- --host 0.0.0.0`, identifica la IP local de esa computadora y abre `http://IP_LOCAL:5173/` en Safari. El firewall debe permitir el puerto. Esta ruta de red local es la única revisión móvil disponible sin publicar la muestra. Comprueba la vista gráfica, el desplazamiento con un dedo, el zoom con dos dedos, la selección de salas y agentes, y el inspector. Si Safari no abre WebGL, aparece la oficina ilustrada navegable.
+Abre la dirección local que imprima Vite, normalmente `http://localhost:5173/`. Para revisar desde un iPhone en la misma red, ejecuta el servidor en una computadora con `npm run dev -- --host 0.0.0.0`, identifica la IP local de esa computadora y abre `http://IP_LOCAL:5173/` en Safari. El firewall debe permitir el puerto. Comprueba el deslizamiento horizontal en ambos sentidos, flechas e indicadores, selección de sala y agente, y el panel inferior. La vista móvil usa la ilustración directamente y no necesita WebGL. En escritorio, si WebGL falla, aparece la oficina ilustrada navegable.
 
 `npm run build` crea los archivos estáticos en `dist/`. `npm test` verifica que los estados visuales no inventen trabajo. La escena 3D requiere WebGL; el navegador usado para la revisión automatizada bloqueó ese contexto, de modo que la prueba visual certifica únicamente la alternativa ilustrada. Una prueba física en iPhone sigue pendiente.
 

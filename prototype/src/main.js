@@ -1,7 +1,10 @@
 import {rooms,byId,DEMO_LABEL} from './data.js';
 import {mountWorld} from './world.js';
 import {mountIllustrated} from './fallback.js';
+import {mountMobileDepartments} from './mobile.js';
 import './style.css';
+const mobilePreview=new URLSearchParams(location.search).has('mobile-preview');
+if(mobilePreview)document.documentElement.classList.add('mobile-preview');
 const app=document.getElementById('app');let world=null,selected=null,inspect=null,activeTab='spaces';
 const icon={map:'⌗',rooms:'▦',agents:'♧',mission:'◇',zoomIn:'+',zoomOut:'−',reset:'⌖'};
 const safe=(v)=>String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -24,9 +27,11 @@ function openOverview(kind){selected=null;inspect=kind;updatePressed();if(kind==
  inspector.hidden=false;document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===kind));
 }
 async function init(){loading.hidden=false;fallback.hidden=true;world?.destroy();world=null;let graphicsFailed=false;
+ if(matchMedia('(max-width:600px)').matches||mobilePreview){world=mountMobileDepartments(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true)});loading.hidden=true;return}
  const showIllustrated=()=>{if(world?.illustrated)return;world?.destroy();world=mountIllustrated(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true)});world.illustrated=true;loading.hidden=true;document.getElementById('scene-note').textContent='OFICINA ILUSTRADA · MUESTRA SIN CONEXIÓN'};
  world=await mountWorld(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true),onProgress:(done,total)=>{document.getElementById('loadBar').style.width=`${Math.round(done/total*100)}%`;document.getElementById('loadText').textContent=`${done} / ${total} recursos`},onReady:()=>{loading.hidden=true},onError:(e)=>{console.warn('WebGL no disponible; se muestra la oficina ilustrada',e);graphicsFailed=true;queueMicrotask(()=>{if(world?.ok&&!world.illustrated)showIllustrated()})}});
  if(graphicsFailed||!world?.ok)showIllustrated()}
 app.addEventListener('click',e=>{let r=e.target.closest('[data-room]');if(r){inspectRoom(r.dataset.room);return}let a=e.target.closest('[data-agent]');if(a){inspectRoom(a.dataset.agent,true);return}let tab=e.target.closest('[data-tab]');if(tab){activeTab=tab.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('selected',x.dataset.tab===activeTab));if(activeTab==='spaces'){inspector.hidden=true;world?.reset()}else openOverview(activeTab);return}let c=e.target.closest('[data-control]');if(c){c.dataset.control==='reset'?world?.reset():world?.zoom(c.dataset.control==='plus'?1:-1);return}let action=e.target.closest('[data-action]')?.dataset.action;if(action==='close'){inspector.hidden=true;return}if(action==='agent'&&selected)inspectRoom(selected,true);if(action==='about'&&selected)inspectRoom(selected);if(action==='retry')init()});
 document.getElementById('directory').onclick=()=>openOverview('directory');document.addEventListener('keydown',e=>{if(e.key==='Escape')inspector.hidden=true;if(e.key==='+'||e.key==='=')world?.zoom(1);if(e.key==='-')world?.zoom(-1);if(e.key==='Home')world?.reset()});
 init();
+matchMedia('(max-width:600px)').addEventListener('change',()=>init());
