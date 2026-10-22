@@ -2,6 +2,8 @@
 
 Esta aplicación permite recorrer los diez departamentos y seis espacios especiales ilustrados en móvil, abrir fichas de habitaciones y personajes, y ver una explicación de cómo se visualizarían misiones. Presenta un ambiente por pantalla: desliza a izquierda o derecha, usa las flechas o toca los indicadores para cambiar de sala. En escritorio conserva el edificio inicial de cinco ambientes y su cámara libre con desplazamiento y zoom; la expansión del edificio de escritorio sigue pendiente. Es una muestra **sin conexión al servidor**: no consulta ni modifica tareas, misiones, aprobaciones o agentes reales. Los nombres de los personajes son provisionales.
 
+En móvil, cada departamento ocupa la pantalla completa. El nombre, la navegación y el acceso a la ficha flotan sobre la escena; la barra inferior abre las vistas secundarias. La vista previa privada de Sites añade sus propios controles del navegador fuera de la aplicación.
+
 ## Ejecutar
 
 ```bash

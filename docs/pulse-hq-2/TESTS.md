@@ -25,3 +25,7 @@ El catálogo móvil ahora muestra diez departamentos y seis espacios especiales;
 Se abrió el navegador en una vista móvil de 390 × 844 px. Se inspeccionaron Dirección, Marketing, Finanzas, oficina del CEO, colaboración y descanso. Las imágenes completas se renderizaron, el selector saltó a las salas 02/16, 09/16, 11/16 y 16/16, y la ficha de Marketing mostró el retrato y la indicación «Sin conexión / No consultada». Se guardaron capturas reales de Marketing, oficina del CEO y descanso. La transición horizontal funciona mediante indicadores y flechas; la verificación de gesto táctil en Safari físico, FPS y memoria permanece pendiente.
 
 El catálogo es visual: las diez apariencias no están vinculadas aún a contratos ni registros de agentes existentes. La conectividad de Supabase, las aprobaciones, los entregables y la persistencia no se han probado en esta expansión. El texto anterior sobre ausencia de diez áreas corresponde a la etapa B inicial y queda supersedido solo para el catálogo visual móvil.
+
+## Revisión de pantalla completa
+
+Tras la observación del CEO de que la sala se veía como tarjeta, se eliminó el marco móvil: cada imagen ocupa el viewport de la aplicación y los controles se superponen. Se revisaron Dirección y Marketing en el navegador con una vista de 390 × 844 px, incluida la transición 01/16 → 02/16 y la lectura del título sobre la imagen. `npm run build` y `npm test` pasaron (4/4). La interfaz propia del visor de ChatGPT que aparece fuera de la página en el iPhone no forma parte de PULSE HQ.

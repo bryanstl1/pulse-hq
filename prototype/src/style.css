@@ -36,3 +36,45 @@
 @media(max-width:600px){.mobile-deck{display:block}.viewer-heading,.scene-note,.view-tools,.rooms-strip,.instructions{display:none}.inspector{top:auto;bottom:0;right:0;width:100%;height:min(60dvh,530px);border-radius:22px 22px 0 0;box-shadow:0 -18px 55px #263f3d30}.inspector-body{padding:31px 24px 45px}}
 /* Browser review at desktop width, rendering exactly the compact layout. */
 @media(min-width:601px){html.mobile-preview{background:#d1d9d0}html.mobile-preview #app{width:390px;height:min(844px,100dvh);margin:auto;box-shadow:0 0 55px #203a2e36}html.mobile-preview .mast{height:58px;padding:0 15px}html.mobile-preview .brand{min-width:0}html.mobile-preview .brand b{font-size:13px}html.mobile-preview .brand small{font-size:7px}html.mobile-preview .top-center,html.mobile-preview .rail,html.mobile-preview .viewer-heading,html.mobile-preview .scene-note,html.mobile-preview .view-tools,html.mobile-preview .rooms-strip,html.mobile-preview .instructions{display:none}html.mobile-preview .demo-pill{font-size:8px;padding:7px 9px}html.mobile-preview .main{height:100%}html.mobile-preview .mobile-deck{display:block}html.mobile-preview .mobile-nav{display:flex;height:65px;flex:none;background:#fffdf8;border-top:1px solid #e3e5da;justify-content:space-around;align-items:center}html.mobile-preview .mobile-nav button{height:54px;min-width:70px;border:0;background:none;color:#95a195;font:25px Georgia,serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}html.mobile-preview .mobile-nav button.selected{color:#397054}html.mobile-preview .mobile-nav small{font:700 9px 'Manrope',sans-serif}html.mobile-preview .inspector{position:absolute;top:auto;bottom:0;right:0;width:100%;height:min(60dvh,530px);border-radius:22px 22px 0 0}}
+
+/* Mobile scene fills the viewport; management controls float above the room. */
+html.mobile-experience body{background:#e8e4d9}
+html.mobile-experience #app{position:relative;height:100dvh}
+html.mobile-experience .workspace{position:absolute;inset:0}
+html.mobile-experience .main,html.mobile-experience .viewport{height:100%;width:100%}
+html.mobile-experience .mast{position:absolute;top:0;left:0;right:0;z-index:25;height:75px;padding:12px 17px;background:linear-gradient(#f7f4ebef,#f7f4eb00);border:0;pointer-events:none}
+html.mobile-experience .mast .brand,html.mobile-experience .mast .top-right{pointer-events:auto}
+html.mobile-experience .brand-symbol{width:37px;height:37px;box-shadow:0 4px 14px #2c413628}
+html.mobile-experience .brand b{font-size:13px}
+html.mobile-experience .brand small{font-size:7px}
+html.mobile-experience .demo-pill{background:#f9f7efe8;border-color:#e5e7dd;box-shadow:0 3px 12px #31503d18}
+html.mobile-experience .icon-button{background:#f9f7efe8;box-shadow:0 3px 12px #31503d18}
+html.mobile-experience .mobile-deck{background:#eee9df}
+html.mobile-experience .mobile-stage-viewport{inset:0;touch-action:pan-y}
+html.mobile-experience .mobile-room-stage,html.mobile-experience .mobile-room-stage.active{border:0;border-radius:0;box-shadow:none;opacity:1;transform:none;transition:none}
+html.mobile-experience .mobile-room-art{background:#eae3d5}
+html.mobile-experience .mobile-room-art img{object-fit:cover;object-position:center center}
+html.mobile-experience .mobile-room-stage:after{height:48%;background:linear-gradient(transparent 12%,#eee9de11 48%,#eae7dcdf 85%,#e9e6dc 100%)}
+html.mobile-experience .mobile-deck-heading{top:80px;left:22px;right:22px;z-index:6;text-shadow:0 1px 10px #f7f3e9}
+html.mobile-experience .mobile-deck-eyebrow{font-size:8px;color:#587866}
+html.mobile-experience .mobile-deck-heading h1{font-size:clamp(25px,7vw,34px);max-width:340px;margin-top:7px;line-height:1.05}
+html.mobile-experience .mobile-deck-heading p{font-size:12px;color:#587368;margin-top:4px}
+html.mobile-experience .mobile-deck-count{font-size:11px;color:#426952}
+html.mobile-experience .mobile-room-agent{z-index:5}
+html.mobile-experience .mobile-room-footer{bottom:154px;left:22px;right:22px;color:#263f36;align-items:center;text-shadow:0 1px 8px #fff9ed}
+html.mobile-experience .mobile-room-footer small{color:#577767;font-size:9px}
+html.mobile-experience .mobile-room-footer strong{font-size:25px;margin-top:3px}
+html.mobile-experience .mobile-room-footer button{width:48px;height:48px;border-radius:15px;box-shadow:0 8px 20px #23463835}
+html.mobile-experience .mobile-deck-controls{bottom:92px;left:17px;right:17px;z-index:7}
+html.mobile-experience .mobile-deck-controls>button{width:44px;height:44px;border-radius:14px;background:#faf9f2e8}
+html.mobile-experience .mobile-deck-dots{gap:6px}
+html.mobile-experience .mobile-deck-dots button{background:#96ab9c;width:6px;height:6px}
+html.mobile-experience .mobile-deck-dots button.active{width:20px;background:#315d43}
+html.mobile-experience .mobile-deck-hint{display:none}
+html.mobile-experience .mobile-nav{position:absolute;left:0;right:0;bottom:0;z-index:22;height:78px;padding-bottom:env(safe-area-inset-bottom);background:#faf9f1e8;border-top:1px solid #ffffffa3;backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px)}
+html.mobile-experience .mobile-nav button{height:62px}
+html.mobile-experience .inspector{z-index:35;bottom:0;height:min(67dvh,570px);box-shadow:0 -20px 60px #1e3b364d}
+@media(max-height:700px){html.mobile-experience .mobile-deck-heading{top:70px}html.mobile-experience .mobile-room-footer{bottom:136px}html.mobile-experience .mobile-deck-controls{bottom:83px}}
+html.mobile-experience .mobile-deck:before{content:'';position:absolute;top:0;left:0;right:0;height:205px;z-index:5;pointer-events:none;background:linear-gradient(#f5f1eaf5 0%,#f5f1eacc 45%,#f5f1ea00 100%)}
+html.mobile-experience .mobile-room-agent{width:105px;height:165px}
+html.mobile-experience .mobile-room-agent .sprite-cell{width:88px;height:147px}

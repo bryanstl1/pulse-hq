@@ -6,6 +6,7 @@ import './style.css';
 const mobilePreview=new URLSearchParams(location.search).has('mobile-preview');
 if(mobilePreview)document.documentElement.classList.add('mobile-preview');
 const isMobile=()=>mobilePreview||matchMedia('(max-width:600px)').matches;
+document.documentElement.classList.toggle('mobile-experience',isMobile());
 const visibleRooms=()=>isMobile()?mobileRooms:rooms;
 const visibleById=id=>isMobile()?mobileRooms.find(r=>r.id===id):byId(id);
 const app=document.getElementById('app');let world=null,selected=null,inspect=null,activeTab='spaces';
@@ -38,4 +39,4 @@ async function init(){loading.hidden=false;fallback.hidden=true;world?.destroy()
 app.addEventListener('click',e=>{let r=e.target.closest('[data-room]');if(r){inspectRoom(r.dataset.room);return}let a=e.target.closest('[data-agent]');if(a){inspectRoom(a.dataset.agent,true);return}let tab=e.target.closest('[data-tab]');if(tab){activeTab=tab.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('selected',x.dataset.tab===activeTab));if(activeTab==='spaces'){inspector.hidden=true;world?.reset()}else openOverview(activeTab);return}let c=e.target.closest('[data-control]');if(c){c.dataset.control==='reset'?world?.reset():world?.zoom(c.dataset.control==='plus'?1:-1);return}let action=e.target.closest('[data-action]')?.dataset.action;if(action==='close'){inspector.hidden=true;return}if(action==='agent'&&selected)inspectRoom(selected,true);if(action==='about'&&selected)inspectRoom(selected);if(action==='retry')init()});
 document.getElementById('directory').onclick=()=>openOverview('directory');document.addEventListener('keydown',e=>{if(e.key==='Escape')inspector.hidden=true;if(e.key==='+'||e.key==='=')world?.zoom(1);if(e.key==='-')world?.zoom(-1);if(e.key==='Home')world?.reset()});
 init();
-matchMedia('(max-width:600px)').addEventListener('change',()=>init());
+matchMedia('(max-width:600px)').addEventListener('change',()=>{document.documentElement.classList.toggle('mobile-experience',isMobile());init()});
