@@ -241,7 +241,7 @@ export function createMascot(agent) {
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.26, 24), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.18, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.012; root.add(shadow); rig.shadow = shadow;
 
-  root.scale.setScalar(1.12);
+  root.scale.setScalar(1.3);
   return new MascotAnimator(rig);
 }
 

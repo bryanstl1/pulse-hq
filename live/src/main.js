@@ -119,8 +119,8 @@ function updateHud() {
   const sc = $('#session'); sc.className = `session ${chip.cls}`; sc.querySelector('span').textContent = chip.text;
   $('#sim-banner').hidden = app.mode !== 'demo';
   const legend = $('#legend');
-  if (app.mode === 'demo') legend.textContent = 'Simulación: datos inventados solo para probar la interfaz';
-  else if (!app.connected) legend.textContent = app.ambient ? 'Sin sesión · los agentes solo pasean (ambiente)' : 'Sin sesión · actividad no consultada';
+  legend.hidden = app.mode === 'demo'; // la franja amarilla ya lo dice
+  if (!app.connected) legend.textContent = app.ambient ? 'Sin sesión · los agentes solo pasean (ambiente)' : 'Sin sesión · actividad no consultada';
   else legend.textContent = app.ambient ? 'Movimiento ambiental activo cuando no hay encargos' : 'Solo actividad registrada';
   const n = app.summary?.approvals || 0;
   const badge = $('#dock [data-dock="approvals"] .badge'); badge.hidden = !n; badge.textContent = n;
@@ -209,6 +209,7 @@ function renderSheet(preserve = false) {
   else if (s.type === 'agent' && s.tab === 'chat' || atBottom) { const b = sheetEl.querySelector('.sheet-body'); if (b) b.scrollTop = b.scrollHeight; }
   // encuadre: el elemento seleccionado queda visible encima del panel
   requestAnimationFrame(() => {
+    if (app.sheet !== s) return; // el panel ya se cerró o cambió: no reencuadrar con datos viejos
     const px = sheetEl.getBoundingClientRect().height;
     if (s.type === 'agent') { const a = app.agentsById[s.id]; stage.focus({ x: a.pos.x, z: a.pos.y, sheetPx: px, zoom: 1.5 }); }
     else if (s.focus) { const c = new THREE.Box3().setFromObject(s.focus.obj).getCenter(new THREE.Vector3()); stage.focus({ x: c.x, z: c.z, sheetPx: px, zoom: 1.45 }); }
@@ -331,7 +332,7 @@ $('#dots').addEventListener('click', e => { const b = e.target.closest('[data-go
 $('#prev').addEventListener('click', () => stage.goToRoom(app.roomIndex - 1));
 $('#next').addEventListener('click', () => stage.goToRoom(app.roomIndex + 1));
 $('#session').addEventListener('click', () => openSheet({ type: 'access' }));
-$('#legend').addEventListener('click', () => openHotspot('coffee', 'rest'));
+$('#legend').addEventListener('click', () => openSheet({ type: 'hot', key: 'coffee', room: 'rest' }));
 window.addEventListener('keydown', e => {
   if (e.target.closest('input,textarea')) return;
   if (e.key === 'ArrowRight') stage.goToRoom(app.roomIndex + 1);
@@ -362,6 +363,8 @@ function frame(now) {
 window.__advance = (n = 1, dt = 1 / 30) => { for (let i = 0; i < n; i++) { simTime += dt * 1000; tick(dt, simTime, i === n - 1); } };
 function tick(dt, now, draw = true) {
   const t = now / 1000;
+  // autocorrección: sin panel abierto la cámara siempre vuelve al encuadre normal
+  if (!app.sheet && (stage.sheetGoal > 0 || stage.goalZoom > 1.2 || stage.focusGoalY !== 0)) stage.focus({});
   stage.update(dt);
   for (const a of app.agents) a.update(dt);
   for (const an of office.animated) {

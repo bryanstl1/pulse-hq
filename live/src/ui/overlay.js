@@ -66,6 +66,12 @@ export class Overlay {
         const label = kind === 'mission' && ag.intent.mission ? `Misión · etapa ${ag.intent.mission.seq}` : kind === 'review' && ag.intent.approvals?.length > 1 ? `${ag.intent.approvals.length} revisiones` : bub.text;
         const html = `<b>${bub.icon}</b><em>${label}</em>`;
         if (bubble.dataset.html !== html) { bubble.innerHTML = html; bubble.dataset.html = html; bubble.className = `bubble ${bub.cls}`; }
+      } else if (ag.emote && ag.intent.source !== 'server' || (ag.emote && ag.intent.kind === 'idle')) {
+        // gesto ambiental: solo cuando el agente ya llegó a su sitio
+        const arrived = !ag.path.length;
+        const html = `<b>${ag.emote}</b>`;
+        bubble.hidden = !arrived;
+        if (arrived && bubble.dataset.html !== html) { bubble.innerHTML = html; bubble.dataset.html = html; bubble.className = 'bubble amb'; }
       } else bubble.hidden = true;
       tag.classList.toggle('selected', ag.def.id === selectedId);
       tag.classList.toggle('dim', sheetOpen && ag.def.id !== selectedId);

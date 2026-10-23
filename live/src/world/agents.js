@@ -3,7 +3,9 @@ import { createMascot } from './mascots.js';
 import { AGENTS, roomById, ROOMS } from '../data/roster.js';
 
 const WALK_SPEED = 1.15, FLY_SPEED = 1.5, TURN = 9;
-const SEAT_Y = 0.27;
+// altura del cuerpo sentado; compensa la escala de la mascota para quedar sobre el asiento (~0.5 m)
+const MASCOT_SCALE = 1.3;
+const SEAT_Y = 0.5 / MASCOT_SCALE - 0.2;
 
 // Cada agente decide qué hacer a partir de una "intención":
 //  · server: viene de un registro de Supabase (trabajando, revisión, error, misión, resultado)
@@ -73,6 +75,7 @@ export class AgentController {
   get isSitting() { return this.atStation(this.stations.desk, 0.3) && ['sit', 'type', 'sleep'].includes(this.anim.pose); }
 
   plan(force = false) {
+    this.emote = null;
     if (this.selected && !this.hasDuty()) return;
     const k = this.intent.kind;
     const desk = this.stations.desk;
@@ -115,7 +118,10 @@ export class AgentController {
     }
     const poses = { desk: 'sit', board: 'think', shelf: 'read', plant: 'idle', window: 'idle', coffee: 'idle', cooler: 'idle', sofa: 'idle' };
     const pose = poses[st.key] || (Math.random() < 0.5 ? 'idle' : 'think');
-    if (st.key === 'desk') this.goSit(st, Math.random() < 0.25 ? 'sleep' : 'sit'); else this.goStand(st, pose);
+    // gesto ambiental (decorativo, nunca indica trabajo)
+    const EMOTE = { shelf: '📖', board: '💭', coffee: '☕', coffee2: '☕', cooler: '💧', sofa: '🛋', sofa2: '🛋', plant: '🌿', window: '🌤' };
+    this.emote = EMOTE[st.key] || (pose === 'think' ? '💭' : null);
+    if (st.key === 'desk') { const nap = Math.random() < 0.25; this.emote = nap ? '💤' : null; this.goSit(st, nap ? 'sleep' : 'sit'); } else this.goStand(st, pose);
     this.ambientTimer = 6 + Math.random() * 8;
   }
 

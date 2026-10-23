@@ -23,6 +23,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-user-select: no
 .agent-tag .bubble em { font-style: normal; }
 .bubble.run { background: var(--run); } .bubble.run b { animation: spin 2.2s linear infinite; }
 .bubble.review { background: #e09a1d; animation: pulse 1.4s ease-in-out infinite; }
+.bubble.amb { background: rgba(255, 252, 246, .88); color: var(--ink); padding: 3px; box-shadow: 0 2px 6px rgba(60, 40, 20, .15); } .bubble.amb b { background: none; width: 20px; height: 20px; font-size: 14px; }
 .bubble.fail { background: var(--err); } .bubble.mission { background: var(--mission); } .bubble.done { background: var(--ok); } .bubble.local { background: #7a7064; }
 .agent-tag.far .name { opacity: .55; transform: scale(.9); }
 .agent-tag.dim { opacity: .35; }
@@ -53,6 +54,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-user-select: no
 .session { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--card); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 6px 18px rgba(60, 40, 20, .12); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .session i { width: 8px; height: 8px; border-radius: 50%; background: #b0a697; }
 .session.ok i { background: var(--ok); box-shadow: 0 0 0 3px rgba(47, 157, 98, .2); } .session.sim i { background: #e0a91d; } .session.sim { background: #fff2cc; }
+#legend[hidden] { display: none; }
 #legend { position: absolute; top: calc(var(--safe-t) + 76px); left: 12px; z-index: 4; border: 0; padding: 5px 10px; border-radius: 999px; background: rgba(42, 37, 32, .62); color: #fff; font-size: 11px; font-weight: 600; max-width: calc(100vw - 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 #sim-banner:not([hidden]) ~ #legend { top: calc(var(--safe-t) + 96px); }
 .edge-nav { position: absolute; top: 46%; z-index: 4; width: 36px; height: 56px; border: 0; border-radius: 14px; background: rgba(255, 252, 246, .55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 26px; line-height: 1; color: var(--ink); box-shadow: 0 4px 14px rgba(60, 40, 20, .1); }
