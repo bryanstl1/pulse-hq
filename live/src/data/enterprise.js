@@ -1,4 +1,5 @@
 import {normalizeActivity} from './state.js';
+import {isCore} from './core.js';
 
 // Mismo cliente que la aplicación anterior (jsDelivr, UMD). Se carga solo cuando hace falta.
 const SUPABASE_UMD='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js';
@@ -23,7 +24,7 @@ export const DEPARTMENTS=[
  'Tecnología y automatización'
 ];
 
-const empty=()=>({roles:[],tasks:[],approvals:[],missions:[],steps:[],deliverables:[],loadedAt:null});
+const empty=()=>({roles:[],tasks:[],approvals:[],missions:[],steps:[],deliverables:[],messages:[],runs:[],loadedAt:null});
 const fail=error=>{throw new Error(error?.message||String(error||'Error del servidor'))};
 
 export function createEnterprise(client,{mode='live'}={}){
@@ -36,16 +37,19 @@ export function createEnterprise(client,{mode='live'}={}){
   if(loading)return loading;
   const id=user.id;
   loading=(async()=>{
-   const [roles,tasks,approvals,missions,steps,deliverables]=await Promise.all([
+   const [roles,tasks,approvals,missions,steps,deliverables,messages,runs]=await Promise.all([
     client.from('pulse_agent_roles').select('department,professional_title,purpose,output_contract,acceptance_criteria,handoff_to,active').eq('active',true),
     client.from('pulse_tasks').select('id,department,instruction,status,result,sources,error,created_at,updated_at').eq('user_id',id).order('created_at',{ascending:false}).limit(100),
     client.from('pulse_approvals').select('id,task_id,department,title,description,status,created_at').eq('user_id',id).order('created_at',{ascending:false}).limit(80),
-    client.from('pulse_missions').select('id,title,objective,status,created_at,updated_at').eq('user_id',id).order('created_at',{ascending:false}).limit(20),
-    client.from('pulse_mission_steps').select('id,mission_id,seq,department,directive,status,result,task_id,error,started_at,finished_at').eq('user_id',id).order('seq',{ascending:true}).limit(220),
-    client.from('pulse_deliverables').select('id,task_id,title,filename,storage_path,mime_type,created_at').eq('user_id',id).order('created_at',{ascending:false}).limit(150)
+    client.from('pulse_missions').select('id,title,objective,status,engine,claimed_at,spent_tokens,budget_tokens,last_error,created_at,updated_at').eq('user_id',id).order('created_at',{ascending:false}).limit(20),
+    client.from('pulse_mission_steps').select('id,mission_id,seq,department,agent_id,directive,status,result,task_id,error,attempt,claimed_at,review,output_format,depends_on,started_at,finished_at').eq('user_id',id).order('seq',{ascending:true}).limit(220),
+    client.from('pulse_deliverables').select('id,task_id,title,filename,storage_path,mime_type,mission_id,agent_id,version,review_status,size_bytes,source_type,created_at').eq('user_id',id).order('created_at',{ascending:false}).limit(150),
+    // registros del motor multiagente: conversación entre agentes y ejecuciones reales del modelo
+    client.from('pulse_agent_messages').select('id,mission_id,step_id,from_agent,to_agent,kind,content,artifact,created_at').eq('user_id',id).order('created_at',{ascending:false}).limit(200),
+    client.from('pulse_runs').select('id,mission_id,step_id,agent_id,phase,provider,model,input_tokens,output_tokens,latency_ms,status,created_at').eq('user_id',id).order('created_at',{ascending:false}).limit(250)
    ]);
    // Keep the previous coherent snapshot on query failure; never mix old and new records.
-   const next={roles:rows(roles),tasks:rows(tasks),approvals:rows(approvals),missions:rows(missions),steps:rows(steps),deliverables:rows(deliverables),loadedAt:new Date().toISOString()};
+   const next={roles:rows(roles),tasks:rows(tasks),approvals:rows(approvals),missions:rows(missions),steps:rows(steps),deliverables:rows(deliverables),messages:rows(messages),runs:rows(runs),loadedAt:new Date().toISOString()};
    if(user?.id===id){snapshot=next;lastError=''};
    return snapshot;
   })();notify();
@@ -95,12 +99,29 @@ export function createEnterprise(client,{mode='live'}={}){
   const value=instruction.trim();if(value.length<5||value.length>2000)throw new Error('Escribe entre 5 y 2000 caracteres.');
   return invoke('pulse-run',{department,instruction:value});
  }
- async function createMission(title,objective){
+ // Misiones del motor multiagente: Ulises planifica, delega en otros agentes y Calidad revisa cada entrega.
+ async function createMission(title,objective,source='missions'){
   const name=title.trim(),goal=objective.trim();
   if(name.length<5||name.length>120||goal.length<20||goal.length>1500)throw new Error('Título de 5 a 120 caracteres y objetivo de 20 a 1500.');
-  return invoke('pulse-mission-control',{action:'create',title:name,objective:goal});
+  return invoke('pulse-core',{action:'mission.create',title:name,objective:goal,source});
+ }
+ // Escribirle a Ulises desde la oficina registra la instrucción en Supabase y abre una misión real.
+ async function askUlises(text){
+  const goal=String(text||'').replace(/\s+/g,' ').trim();
+  if(goal.length<20)throw new Error('Describe el encargo para Ulises con al menos 20 caracteres.');
+  if(goal.length>1500)throw new Error('Máximo 1500 caracteres.');
+  const words=goal.replace(/^(ulises|hola ulises)[,:]?\s*/i,'');
+  let title=words.length<=80?words:words.slice(0,80).replace(/\s+\S*$/,'')+'…';
+  title=title.charAt(0).toUpperCase()+title.slice(1);
+  if(title.length<5)title='Encargo del CEO';
+  return createMission(title,goal,'office');
  }
  async function missionAction(action,missionId){
+  const m=snapshot.missions.find(x=>x.id===missionId);
+  if(isCore(m)){
+   if(!['pause','resume','cancel'].includes(action))throw new Error('Acción no disponible para misiones del motor multiagente.');
+   return invoke('pulse-core',{action:'mission.'+action,missionId});
+  }
   if(!['pause','resume','retry','revise'].includes(action))throw new Error('Acción de misión inválida.');
   return invoke('pulse-mission-control',{action,missionId});
  }
@@ -132,6 +153,6 @@ export function createEnterprise(client,{mode='live'}={}){
   const activity=recent?normalizeActivity({source:'server',record:recent}):approvals.length?normalizeActivity({source:'server',record:{status:'pending'}}):{kind:'idle',label:'Disponible',actionable:false};
   return {role,tasks,approvals,steps,activity};
  }
- return {mode,init,refresh,requestLogin,verifyCode,verifyLink,signOut,runTask,createMission,missionAction,decideApproval,fileUrl,departmentData,
+ return {mode,init,refresh,requestLogin,verifyCode,verifyLink,signOut,runTask,createMission,askUlises,missionAction,decideApproval,fileUrl,departmentData,
   get user(){return user},get snapshot(){return snapshot},get loading(){return Boolean(loading)},get lastError(){return lastError}};
 }

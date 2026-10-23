@@ -50,14 +50,14 @@ export class AgentController {
   setIntent(intent) {
     const prev = this.intent; this.intent = intent;
     if (prev.kind === intent.kind && prev.taskId === intent.taskId && prev.mission?.id === intent.mission?.id) return;
-    if (prev.kind === 'running' && intent.kind === 'completed') { this.celebrate = 2.2; this.world.broadcast?.('done', this); }
+    if ((prev.kind === 'running' || prev.kind === 'receiving') && intent.kind === 'completed') { this.celebrate = 2.2; this.world.broadcast?.('done', this); }
     this.plan(true);
   }
 
   setAmbient(on) { this.ambientEnabled = on; if (!on && this.intent.source !== 'server') this.plan(true); }
 
   /** Tiene algo que hacer por un registro del servidor o por una instrucción local. */
-  hasDuty() { return Boolean(this.local) || ['running', 'failed', 'review', 'mission'].includes(this.intent.kind) || this.celebrate > 0; }
+  hasDuty() { return Boolean(this.local) || ['receiving', 'running', 'failed', 'review', 'mission'].includes(this.intent.kind) || this.celebrate > 0; }
 
   select(on) {
     this.selected = on; this.anim.selected = on;
@@ -80,7 +80,8 @@ export class AgentController {
     if (this.selected && !this.hasDuty()) return;
     const k = this.intent.kind;
     const desk = this.stations.desk;
-    if (k === 'running' || this.local?.kind === 'sending') return this.goSit(desk, k === 'running' ? 'type' : 'think');
+    // «Recibiendo» (registro del servidor) o envío local en curso: va a su mesa y piensa; «Trabajando»: teclea
+    if (k === 'running' || k === 'receiving' || this.local?.kind === 'sending') return this.goSit(desk, k === 'running' ? 'type' : 'think');
     if (k === 'failed') return this.goSit(desk, 'slump');
     if (k === 'review') return this.goStand(this.stations.door ? { ...this.stations.door, wz: this.stations.door.wz - 0.3 } : desk, 'read');
     if (k === 'mission') {

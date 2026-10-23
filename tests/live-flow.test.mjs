@@ -41,20 +41,20 @@ test('el error del motor llega como error y permite reintentar', async () => {
   client.dispose();
 });
 
-test('una misión avanza por etapas y termina en propuesta para el CEO', async () => {
+test('una misión del motor multiagente (simulado) avanza por etapas y termina en propuesta para el CEO', async () => {
   const client = createDemoClient({ speed: 200 });
   const ent = createEnterprise(client, { mode: 'demo' });
   await ent.init();
   const r = await ent.createMission('Festival de invierno', 'Diseñar experiencia, patrocinio y presupuesto para un festival de invierno');
   await ent.refresh();
-  const steps = ent.snapshot.steps.filter(s => s.mission_id === r.missionId);
-  assert.ok(steps.length >= 3);
-  assert.equal(steps[0].status, 'running');
-  await new Promise(res => setTimeout(res, 2000));
+  assert.equal(ent.snapshot.missions.find(x => x.id === r.missionId).engine, 'core');
+  await new Promise(res => setTimeout(res, 1200));
   await ent.refresh();
   const m = ent.snapshot.missions.find(x => x.id === r.missionId);
+  const steps = ent.snapshot.steps.filter(s => s.mission_id === r.missionId);
+  assert.ok(steps.length >= 4, 'tres agentes + consolidación de Ulises');
   assert.equal(m.status, 'awaiting_ceo');
-  assert.ok(ent.snapshot.steps.filter(s => s.mission_id === r.missionId).every(s => s.status === 'completed'));
+  assert.ok(steps.every(s => s.status === 'completed'));
   client.dispose();
 });
 

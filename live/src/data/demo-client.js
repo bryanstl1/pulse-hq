@@ -38,7 +38,7 @@ function seed(user) {
   ];
   const deliverables = [{ id: uid(), user_id: user.id, task_id: tasks[1].id, title: '[Simulación] Guion del reel', filename: 'guion-reel-simulacion.md', storage_path: 'demo/guion.md', mime_type: 'text/markdown', created_at: iso(-5 * 60_000) }];
   const roles = Object.keys(SAMPLE).map(department => ({ department, professional_title: `[Simulación] Responsable de ${department.toLowerCase()}`, purpose: 'Contrato profesional simulado para pruebas de interfaz.', output_contract: 'Entregable en texto estructurado.', acceptance_criteria: 'Claro, verificable y listo para revisión del CEO.', handoff_to: null, active: true }));
-  return { pulse_tasks: tasks, pulse_approvals: approvals, pulse_missions: missions, pulse_mission_steps: steps, pulse_deliverables: deliverables, pulse_agent_roles: roles };
+  return { pulse_tasks: tasks, pulse_approvals: approvals, pulse_missions: missions, pulse_mission_steps: steps, pulse_deliverables: deliverables, pulse_agent_roles: roles, pulse_agent_messages: [], pulse_runs: [] };
 }
 
 export function createDemoClient({ speed = 1 } = {}) {
@@ -85,12 +85,13 @@ export function createDemoClient({ speed = 1 } = {}) {
     const chain = {
       select() { return chain; },
       eq(col, val) { filters.push([col, val]); return chain; },
+      in(col, vals) { filters.push([col, { in: vals }]); return chain; },
       order(col, { ascending = true } = {}) { orderBy = [col, ascending]; return chain; },
       limit(n) { lim = n; return chain; },
       update(value) { patch = value; return chain; },
       then(resolve, reject) {
         try {
-          let rows = (db[table] || []).filter(r => filters.every(([c, v]) => r[c] === v));
+          let rows = (db[table] || []).filter(r => filters.every(([c, v]) => (v && v.in ? v.in.includes(r[c]) : r[c] === v)));
           if (patch) { rows.forEach(r => Object.assign(r, patch, { updated_at: iso() })); return Promise.resolve({ data: rows.map(r => ({ id: r.id })), error: null }).then(resolve, reject); }
           if (orderBy) { const [c, asc] = orderBy; rows = [...rows].sort((a, b) => (a[c] > b[c] ? 1 : a[c] < b[c] ? -1 : 0) * (asc ? 1 : -1)); }
           if (lim) rows = rows.slice(0, lim);
@@ -113,6 +114,7 @@ export function createDemoClient({ speed = 1 } = {}) {
       complete(task, { approval: /propuesta|aprob|revis/i.test(body.instruction) || body.department === 'Ventas y patrocinios' });
       return { data: { ok: true, taskId: task.id }, error: null };
     }
+    if (slug === 'pulse-core') return simulateCore(body);
     if (slug === 'pulse-mission-control') {
       if (body.action === 'create') {
         const id = uid();
@@ -131,6 +133,77 @@ export function createDemoClient({ speed = 1 } = {}) {
       return { data: { ok: true }, error: null };
     }
     return { data: null, error: { message: `Función ${slug} no simulada.` } };
+  }
+
+  // ——— Motor multiagente SIMULADO (misma forma de registros que pulse-core, sin IA ni servidor) ———
+  const SIM_PLAN = [
+    { agent: 'iris', dept: 'Inteligencia de mercado', fmt: 'markdown', text: 'Investigar el contexto y reunir evidencia' },
+    { agent: 'rocco', dept: 'Ventas y patrocinios', fmt: 'markdown', text: 'Convertir la evidencia en propuesta comercial' },
+    { agent: 'tomas', dept: 'Finanzas y administración', fmt: 'xlsx', text: 'Estimar el presupuesto en hoja de cálculo' }
+  ];
+  const NAMES = { iris: 'Iris', rocco: 'Rocco', tomas: 'Tomás', ulises: 'Ulises', calidad: 'Calidad', ceo: 'CEO' };
+  const msg = (m, step, from, to, kind, content, artifact = null) => db.pulse_agent_messages.unshift({ id: uid(), user_id: user.id, mission_id: m.id, step_id: step?.id || null, from_agent: from, to_agent: to, kind, content: `[Simulación] ${content}`, artifact: { ...(artifact || {}), simulated: true }, created_at: iso() });
+  const run = (m, step, agent, phase) => db.pulse_runs.unshift({ id: uid(), user_id: user.id, mission_id: m.id, step_id: step?.id || null, agent_id: agent, phase, provider: 'simulación', model: 'sin-ia', input_tokens: 0, output_tokens: 0, latency_ms: 0, status: 'ok', created_at: iso() });
+
+  function coreAdvance(missionId) {
+    const m = db.pulse_missions.find(x => x.id === missionId);
+    if (!m || !['running'].includes(m.status)) return;
+    const steps = db.pulse_mission_steps.filter(x => x.mission_id === m.id).sort((a, b) => a.seq - b.seq);
+    const next = steps.find(x => x.status === 'pending' && (x.depends_on || []).every(d => steps.find(y => y.seq === d)?.status === 'completed'));
+    if (!next) {
+      if (steps.length && steps.every(x => x.status === 'completed')) {
+        m.status = 'awaiting_ceo'; m.updated_at = iso();
+        db.pulse_approvals.unshift({ id: uid(), user_id: user.id, task_id: steps.at(-1).task_id, department: 'Dirección estratégica', title: `[Simulación] Misión «${m.title.replace('[Simulación] ', '')}»: entregables listos`, description: 'Simulación: no es un entregable real.', status: 'pending', created_at: iso() });
+        msg(m, null, 'ulises', 'ceo', 'notice', 'Misión terminada (simulada).');
+      }
+      return;
+    }
+    Object.assign(next, { status: 'running', claimed_at: iso(), started_at: next.started_at || iso() });
+    later(2500, () => { if (m.status !== 'running') return; run(m, next, next.agent_id, next.attempt ? 'correct' : 'analyze'); });
+    later(5000, () => { if (m.status !== 'running') return; run(m, next, next.agent_id, 'act'); });
+    later(7500, () => { if (m.status !== 'running') return; run(m, next, 'calidad', 'evaluate'); });
+    later(9500, () => {
+      if (m.status !== 'running') return;
+      const ext = next.output_format === 'xlsx' ? 'xlsx' : next.output_format === 'pdf' ? 'pdf' : 'md';
+      const task = { id: uid(), user_id: user.id, department: next.department, instruction: next.directive, status: 'completed', result: `[Simulación] Aportación de ${NAMES[next.agent_id]}.`, sources: null, error: null, created_at: next.started_at, updated_at: iso() };
+      db.pulse_tasks.unshift(task);
+      const file = { id: uid(), user_id: user.id, task_id: task.id, mission_id: m.id, agent_id: next.agent_id, title: `[Simulación] Etapa ${next.seq} (${NAMES[next.agent_id]})`, filename: `etapa-${next.seq}-simulacion.${ext}`, storage_path: `demo/${task.id}.${ext}`, mime_type: 'text/markdown', version: next.attempt + 1, review_status: 'approved', size_bytes: 1024, source_type: 'simulation', created_at: iso() };
+      db.pulse_deliverables.unshift(file);
+      Object.assign(next, { status: 'completed', task_id: task.id, result: task.result, finished_at: iso(), claimed_at: null, review: { verdict: 'approve', score: 8 } });
+      msg(m, next, 'calidad', next.agent_id, 'review', `Etapa ${next.seq} aprobada (8/10).`, { deliverable_id: file.id });
+      msg(m, next, next.agent_id, 'ulises', 'result', `Etapa ${next.seq} terminada.`, { deliverable_id: file.id });
+      later(1500, () => coreAdvance(m.id));
+    });
+  }
+
+  function simulateCore(body) {
+    if (body.action === 'mission.create') {
+      const m = { id: uid(), user_id: user.id, title: `[Simulación] ${body.title}`, objective: body.objective, status: 'planning', engine: 'core', claimed_at: null, spent_tokens: 0, budget_tokens: 0, last_error: null, created_at: iso(), updated_at: iso() };
+      db.pulse_missions.unshift(m);
+      msg(m, null, 'ceo', 'ulises', 'request', `${body.title}: ${body.objective}`, { source: body.source || 'api' });
+      later(2500, () => { m.claimed_at = iso(); });
+      later(5000, () => {
+        if (m.status !== 'planning') return;
+        run(m, null, 'ulises', 'plan');
+        const plan = [...SIM_PLAN, { agent: 'ulises', dept: 'Dirección estratégica', fmt: 'pdf', text: 'Consolidar el documento final' }];
+        plan.forEach((p, i) => {
+          const step = { id: uid(), user_id: user.id, mission_id: m.id, seq: i + 1, department: p.dept, agent_id: p.agent, directive: `[Simulación] ${p.text}`, status: 'pending', result: null, task_id: null, error: null, attempt: 0, claimed_at: null, review: null, output_format: p.fmt, depends_on: i ? (p.agent === 'ulises' ? [1, 2, 3] : [i]) : [], started_at: null, finished_at: null };
+          db.pulse_mission_steps.push(step);
+          msg(m, step, 'ulises', p.agent, 'request', `Etapa ${i + 1}: ${p.text}`);
+        });
+        msg(m, null, 'ulises', 'ceo', 'decision', `Plan registrado con ${plan.length} etapas (simulado).`);
+        m.status = 'running'; m.updated_at = iso();
+        later(1500, () => coreAdvance(m.id));
+      });
+      return { data: { ok: true, missionId: m.id }, error: null };
+    }
+    const m = db.pulse_missions.find(x => x.id === body.missionId);
+    if (!m) return { data: { ok: false, error: 'Misión no encontrada' }, error: null };
+    if (body.action === 'mission.pause') m.status = 'paused';
+    if (body.action === 'mission.cancel') m.status = 'cancelled';
+    if (body.action === 'mission.resume') { m.status = 'running'; db.pulse_mission_steps.filter(x => x.mission_id === m.id && x.status === 'running').forEach(x => Object.assign(x, { status: 'pending', claimed_at: null })); later(1000, () => coreAdvance(m.id)); }
+    m.updated_at = iso();
+    return { data: { ok: true }, error: null };
   }
 
   const client = {

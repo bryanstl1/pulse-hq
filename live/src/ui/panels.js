@@ -2,9 +2,10 @@
 import { ROOMS, AGENTS, agentForDept, roomById } from '../data/roster.js';
 import { normalizeActivity } from '../data/state.js';
 import { HOTSPOT_INFO } from '../world/layout.js';
+import { CORE_AGENT_BY_DEPT, CORE_NAMES, DEPT_BY_CORE_AGENT, coreEntries, isCore, runStats, shortId } from '../data/core.js';
 
 export const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const STATUS = { queued: 'En cola', running: 'En ejecución', processing: 'En ejecución', in_progress: 'En ejecución', completed: 'Completado', failed: 'Falló', error: 'Falló', pending: 'Pendiente', paused: 'En pausa', approved: 'Aprobada', rejected: 'Rechazada', awaiting_ceo: 'Espera al CEO', reviewed: 'Revisada', revising: 'En revisión', active: 'Activa', cancelled: 'Cancelada' };
+const STATUS = { planning: 'Planificando', needs_attention: 'Requiere atención', queued: 'En cola', running: 'En ejecución', processing: 'En ejecución', in_progress: 'En ejecución', completed: 'Completado', failed: 'Falló', error: 'Falló', pending: 'Pendiente', paused: 'En pausa', approved: 'Aprobada', rejected: 'Rechazada', awaiting_ceo: 'Espera al CEO', reviewed: 'Revisada', revising: 'En revisión', active: 'Activa', cancelled: 'Cancelada' };
 const st = s => STATUS[String(s || '').toLowerCase()] || esc(s || 'Sin estado');
 
 export function ago(iso) {
@@ -25,18 +26,75 @@ export function sessionChip(app) {
   return { cls: 'off', text: 'Sin sesión' };
 }
 
-function intentPill(intent, local) {
-  if (local?.kind === 'sending') return '<span class="pill local">Enviando instrucción · local</span>';
+const sim = app => app?.mode === 'demo';
+function evidenceLine(e, app) {
+  if (!e) return '';
+  const parts = [['mission', 'misión'], ['step', 'etapa'], ['run', 'ejecución'], ['message', 'mensaje'], ['deliverable', 'archivo']].filter(([k]) => e[k]).map(([k, l]) => `${l} ${esc(shortId(e[k]))}`);
+  return parts.length ? `<small class="evidence">${sim(app) ? 'Registro SIMULADO (no existe en Supabase)' : 'Evidencia en Supabase'}: ${parts.join(' · ')}</small>` : '';
+}
+function intentPill(intent, local, app) {
+  if (local?.kind === 'sending' && !['receiving', 'running'].includes(intent.kind)) return '<span class="pill local">Enviando instrucción · aún sin confirmar</span>';
+  if (intent.evidence) {
+    const cls = { receiving: 'recv', running: 'run', completed: 'done', failed: 'fail', mission: 'mission' }[intent.kind] || 'idle';
+    return `<span class="pill ${cls}">${esc(intent.label)} · ${sim(app) ? 'simulación' : 'servidor'}</span>${intent.detail ? `<small class="detail">${esc(intent.detail)}</small>` : ''}${evidenceLine(intent.evidence, app)}`;
+  }
   const map = { running: ['run', 'Trabajando · servidor'], review: ['review', 'Revisión pendiente · servidor'], failed: ['fail', 'Último encargo falló · servidor'], mission: ['mission', 'En misión · servidor'], completed: ['done', 'Resultado reciente · servidor'], idle: ['idle', 'Sin encargos en curso'], unconnected: ['off', 'Actividad no consultada'] };
   const [c, t] = map[intent.kind] || map.idle;
   return `<span class="pill ${c}">${t}</span>`;
 }
 
+const isUlisesDept = dept => CORE_AGENT_BY_DEPT[dept] === 'ulises';
+const nameOf = id => CORE_NAMES[id] || esc(id);
+const agentOfCore = id => agentForDept(DEPT_BY_CORE_AGENT[id]);
+const coreTaskIds = s => new Set((s.steps || []).filter(x => x.agent_id && x.task_id).map(x => x.task_id));
+
+function relayMsg(m, me) {
+  const a = agentOfCore(m.from_agent);
+  const cls = m.kind === 'blocker' ? 'error' : m.from_agent === 'calidad' ? 'relay' : 'relay';
+  const kind = { request: 'encargo', result: 'resultado', review: 'revisión', feedback: 'correcciones', decision: 'decisión', blocker: 'bloqueo', notice: 'aviso' }[m.kind] || m.kind;
+  return `<div class="msg agent ${cls}">${a ? portrait(a, 'xs') : '<span class="portrait xs qa">✓</span>'}<div><p><b class="from">${nameOf(m.from_agent)} → ${nameOf(m.to_agent)}</b> ${excerpt(m.content, 420)}</p><small class="kind">${esc(kind)} · ${ago(m.created_at)} · mensaje ${esc(shortId(m.id))}</small></div></div>`;
+}
+
+function stepCard(app, step) {
+  const s = app.ent.snapshot;
+  const files = (s.deliverables || []).filter(d => d.task_id && d.task_id === step.task_id);
+  const st2 = runStats(s, { stepId: step.id });
+  return `<div class="stepcard ${esc(String(step.status))}"><header><b>Etapa ${esc(step.seq)} · ${nameOf(step.agent_id)}</b><span class="pill ${step.status === 'completed' ? 'done' : step.status === 'failed' ? 'fail' : step.status === 'running' ? 'run' : 'idle'}">${st(step.status)}</span></header><p>${excerpt(step.directive, 160)}</p><small class="muted">${st2.total} ejecuciones de IA · ${st2.tokens.toLocaleString('es-MX')} tokens${step.attempt ? ` · intento ${step.attempt + 1}` : ''}${step.review?.score != null ? ` · Calidad ${step.review.score}/10` : ''}</small>${files.length ? `<div class="chips">${files.map(f => `<button class="chip file" data-action="file" data-id="${esc(f.id)}">⤓ ${esc(f.filename)}</button>`).join('')}</div>` : ''}</div>`;
+}
+
+function coreBlock(app, entry, agent) {
+  const s = app.ent.snapshot, m = entry.mission;
+  if (entry.type === 'mission') {
+    const req = entry.messages.find(x => x.from_agent === 'ceo' && x.kind === 'request');
+    const steps = (s.steps || []).filter(x => x.mission_id === m.id).sort((a, b) => a.seq - b.seq);
+    const files = (s.deliverables || []).filter(d => d.mission_id === m.id && d.review_status === 'approved');
+    const appr = (s.approvals || []).filter(a => a.status === 'pending' && steps.some(x => x.task_id && x.task_id === a.task_id));
+    const rs = runStats(s, { missionId: m.id });
+    const replies = entry.messages.filter(x => x !== req);
+    const waiting = m.status === 'planning' && !replies.length;
+    return `<div class="msg ceo"><div><p>${esc(m.objective)}</p><small>Tú · ${ago(m.created_at)} · ${sim(app) ? 'registro SIMULADO' : 'registrado en Supabase'} · misión ${esc(shortId(m.id))}${req?.artifact?.source === 'office' ? ' · desde la oficina' : ''}</small></div></div>`
+      + replies.map(x => relayMsg(x)).join('')
+      + (waiting ? `<div class="msg agent working">${portrait(agent, 'xs')}<div><p><span class="typing"><i></i><i></i><i></i></span> ${m.claimed_at ? 'Preparando el plan' : 'Recibido; esperando al motor'}</p><small>Estado del servidor: ${st(m.status)}</small></div></div>` : '')
+      + (steps.length ? `<div class="msg agent">${portrait(agent, 'xs')}<div><p><b>Progreso de la misión</b> · ${st(m.status)} · ${rs.total} ejecuciones de IA (${rs.tokens.toLocaleString('es-MX')} tokens)</p>${steps.map(x => stepCard(app, x)).join('')}${files.length ? `<div class="chips">${files.map(f => `<button class="chip file" data-action="file" data-id="${esc(f.id)}">⤓ ${esc(f.filename)}</button>`).join('')}</div>` : ''}${appr.map(approvalRow).join('')}<div class="chips"><button class="chip" data-action="mission" data-id="${esc(m.id)}">Ver misión completa</button></div></div></div>` : '');
+  }
+  const step = entry.step;
+  const live = step.status === 'running';
+  return entry.messages.map(x => relayMsg(x)).join('') + stepCard(app, step)
+    + (live ? `<div class="msg agent working">${portrait(agent, 'xs')}<div><p><span class="typing"><i></i><i></i><i></i></span> Etapa en curso</p><small>Registro del servidor · reclamada ${ago(step.claimed_at)}</small></div></div>` : '');
+}
+
 function taskThread(app, dept, agent) {
   const s = app.ent.snapshot;
-  const tasks = (s.tasks || []).filter(t => t.department === dept).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).slice(-12);
-  if (!tasks.length) return `<div class="empty"><p>Todavía no hay encargos registrados con ${esc(agent.name)}.</p><p class="muted">Escribe una instrucción abajo: se registrará como tarea y la ejecutará el motor existente.</p></div>`;
-  return tasks.map(t => {
+  const skip = coreTaskIds(s);
+  const legacy = (s.tasks || []).filter(t => t.department === dept && !skip.has(t.id)).map(t => ({ type: 'task', at: t.created_at, task: t }));
+  const items = [...legacy, ...coreEntries(s, dept)].sort((a, b) => Date.parse(a.at || 0) - Date.parse(b.at || 0)).slice(-10);
+  if (!items.length) return `<div class="empty"><p>Todavía no hay encargos registrados con ${esc(agent.name)}.</p><p class="muted">${isUlisesDept(dept) ? 'Escríbele abajo: tu instrucción se registra en Supabase y Ulises la convierte en una misión con otros agentes y revisión de Calidad.' : 'Escribe una instrucción abajo: se registrará como tarea y la ejecutará el motor existente.'}</p></div>`;
+  return items.map(it => it.type === 'task' ? taskBlock(app, it.task, agent) : coreBlock(app, it, agent)).join('');
+}
+
+function taskBlock(app, t, agent) {
+  const s = app.ent.snapshot;
+  {
     const files = (s.deliverables || []).filter(d => d.task_id === t.id);
     const appr = (s.approvals || []).filter(a => a.task_id === t.id);
     const live = normalizeActivity({ source: 'server', record: t }).kind === 'running';
@@ -45,7 +103,7 @@ function taskThread(app, dept, agent) {
     else if (t.status === 'completed') reply = `<div class="msg agent">${portrait(agent, 'xs')}<div><p>${excerpt(t.result)}</p><div class="chips">${files.map(f => `<button class="chip file" data-action="file" data-id="${esc(f.id)}">⤓ ${esc(f.filename || f.title)}</button>`).join('')}<button class="chip" data-action="task" data-id="${esc(t.id)}">Ver completo</button></div>${appr.filter(a => a.status === 'pending').map(a => approvalRow(a)).join('')}<small>${ago(t.updated_at || t.created_at)}${appr.length && !appr.some(a => a.status === 'pending') ? ' · revisión ' + st(appr[0].status).toLowerCase() : ''}</small></div></div>`;
     else reply = `<div class="msg agent error">${portrait(agent, 'xs')}<div><p><b>No se completó.</b> ${excerpt(t.error || 'Error sin detalle', 220)}</p><div class="chips"><button class="chip" data-action="retry" data-id="${esc(t.id)}">Reintentar (nuevo encargo)</button><button class="chip" data-action="task" data-id="${esc(t.id)}">Detalle</button></div><small>${st(t.status)} · ${ago(t.updated_at || t.created_at)}</small></div></div>`;
     return `<div class="msg ceo"><div><p>${esc(t.instruction)}</p><small>Tú · ${ago(t.created_at)}</small></div></div>${reply}`;
-  }).join('');
+  }
 }
 
 function approvalRow(a) {
@@ -54,12 +112,14 @@ function approvalRow(a) {
 
 function workList(app, dept) {
   const s = app.ent.snapshot;
-  const tasks = (s.tasks || []).filter(t => t.department === dept);
+  const skip = coreTaskIds(s);
+  const tasks = (s.tasks || []).filter(t => t.department === dept && !skip.has(t.id));
   const approvals = (s.approvals || []).filter(a => a.department === dept && a.status === 'pending');
   const steps = (s.steps || []).filter(x => x.department === dept).slice(-6).reverse();
+  const coreId = CORE_AGENT_BY_DEPT[dept];
   const active = tasks.filter(t => ['queued', 'running', 'processing', 'in_progress'].includes(t.status));
   const recent = tasks.filter(t => !active.includes(t)).slice(0, 6);
-  const files = (s.deliverables || []).filter(d => tasks.some(t => t.id === d.task_id)).slice(0, 6);
+  const files = (s.deliverables || []).filter(d => tasks.some(t => t.id === d.task_id) || (coreId && d.agent_id === coreId)).slice(0, 8);
   const sec = (title, body, empty) => `<section class="sec"><h4>${title}</h4>${body || `<p class="muted">${empty}</p>`}</section>`;
   return sec('Te necesita', approvals.map(approvalRow).join(''), 'Sin revisiones pendientes.')
     + sec('En curso', active.map(t => `<button class="row-item" data-action="task" data-id="${esc(t.id)}"><span class="ic run">⚙︎</span><span><b>${esc(t.instruction)}</b><small>${st(t.status)} · ${ago(t.updated_at || t.created_at)}</small></span></button>`).join(''), 'Nada en ejecución según el servidor.')
@@ -68,7 +128,8 @@ function workList(app, dept) {
     + sec('Entregables', files.map(fileRow).join(''), 'Sin archivos generados.');
 }
 
-const fileRow = f => `<button class="row-item" data-action="file" data-id="${esc(f.id)}"><span class="ic file">⤓</span><span><b>${esc(f.title || f.filename)}</b><small>${esc(f.filename || '')} · ${ago(f.created_at)}</small></span></button>`;
+const REVIEW = { approved: 'aprobado por Calidad', rejected: 'devuelto por Calidad', pending: 'en revisión' };
+const fileRow = f => `<button class="row-item" data-action="file" data-id="${esc(f.id)}"><span class="ic file">⤓</span><span><b>${esc(f.title || f.filename)}</b><small>${esc(f.filename || '')}${f.version ? ` · v${esc(f.version)}` : ''}${f.review_status ? ` · ${esc(REVIEW[f.review_status] || f.review_status)}` : ''}${f.size_bytes ? ` · ${Math.max(1, Math.round(f.size_bytes / 1024))} KB` : ''} · ${ago(f.created_at)}</small></span></button>`;
 
 function lockedBody(agentName) {
   return `<div class="empty locked"><p><b>Actividad no consultada.</b></p><p class="muted">Inicia sesión como CEO para ver encargos reales${agentName ? ` y hablar con ${esc(agentName)}` : ''}. También puedes abrir la simulación local para probar el recorrido sin tocar datos.</p><div class="row"><button class="btn" data-action="access">Acceso del CEO</button><button class="btn ghost" data-action="demo">Probar simulación</button></div></div>`;
@@ -79,13 +140,13 @@ export function agentSheet(app, agent, tab = 'chat') {
   const ctrl = app.agentsById[agent.id];
   const role = (app.ent?.snapshot.roles || []).find(r => r.department === dept);
   const sending = app.sending[dept];
-  const header = `<header class="sheet-head agent">${portrait(agent, 'lg')}<div class="who"><small>${esc(room.name)}</small><h3>${esc(agent.name)}</h3><p>${esc(role?.professional_title || agent.role)}</p>${intentPill(ctrl.intent, ctrl.local)}</div><button class="close" data-action="close" aria-label="Volver a la oficina">×</button></header>
+  const header = `<header class="sheet-head agent">${portrait(agent, 'lg')}<div class="who"><small>${esc(room.name)}</small><h3>${esc(agent.name)}</h3><p>${esc(role?.professional_title || agent.role)}</p>${intentPill(ctrl.intent, ctrl.local, app)}</div><button class="close" data-action="close" aria-label="Volver a la oficina">×</button></header>
   <div class="tabs" role="tablist">${[['chat', 'Conversación'], ['work', 'Trabajo'], ['profile', 'Perfil']].map(([k, l]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-action="tab" data-tab="${k}">${l}</button>`).join('')}</div>`;
   let body, footer = '';
   if (!app.connected) body = lockedBody(agent.name);
   else if (tab === 'chat') {
     body = `<div class="thread">${taskThread(app, dept, agent)}</div>${sourceNote(app.mode)}`;
-    footer = `<form class="composer" data-action="send"><textarea name="instruction" rows="1" maxlength="2000" placeholder="Instrucción para ${esc(agent.name)}…" ${sending ? 'disabled' : ''}></textarea><button class="send" ${sending ? 'disabled' : ''} aria-label="Enviar instrucción">${sending ? '<span class="spin"></span>' : '↑'}</button></form><p class="composer-note">${sending ? 'Esperando al motor <code>pulse-run</code>… el estado se actualiza desde el servidor.' : 'Se registra como tarea y la ejecuta <code>pulse-run</code>. Cada instrucción es independiente: no hereda la conversación anterior.'}</p>`;
+    footer = `<form class="composer" data-action="send"><textarea name="instruction" rows="1" placeholder="${isUlisesDept(dept) ? 'Encargo para Ulises: qué quieres lograr y qué esperas recibir…' : `Instrucción para ${esc(agent.name)}…`}" maxlength="${isUlisesDept(dept) ? 1500 : 2000}" ${sending ? 'disabled' : ''}></textarea><button class="send" ${sending ? 'disabled' : ''} aria-label="Enviar instrucción">${sending ? '<span class="spin"></span>' : '↑'}</button></form><p class="composer-note">${isUlisesDept(dept) ? (sending ? 'Registrando la instrucción en Supabase…' : 'Se registra en Supabase y abre una misión de <code>pulse-core</code>: Ulises planifica, delega en otros agentes y Calidad revisa cada entrega. Mínimo 20 caracteres.') : sending ? 'Esperando al motor <code>pulse-run</code>… el estado se actualiza desde el servidor.' : 'Se registra como tarea y la ejecuta <code>pulse-run</code> (una llamada a Gemini). Para trabajo entre varios agentes, escríbele a Ulises.'}</p>`;
   } else if (tab === 'work') body = workList(app, dept) + sourceNote(app.mode);
   else body = `<section class="sec contract">${role ? `<h4>Contrato profesional</h4><dl><dt>Puesto</dt><dd>${esc(role.professional_title)}</dd><dt>Propósito</dt><dd>${esc(role.purpose)}</dd><dt>Entregable</dt><dd>${esc(role.output_contract)}</dd><dt>Criterios de aceptación</dt><dd>${esc(role.acceptance_criteria)}</dd>${role.handoff_to ? `<dt>Traspasa a</dt><dd>${esc(role.handoff_to)}</dd>` : ''}</dl>` : '<p class="muted">No hay contrato registrado para este departamento.</p>'}<p class="note">${esc(agent.name)} es el personaje visual de ${esc(room.name)}. El nombre y la especie son provisionales y no identifican a un agente individual del backend.</p></section>`;
   return { html: header + `<div class="sheet-body">${body}</div>` + footer, size: 'agent' };
@@ -107,8 +168,25 @@ export function taskSheet(app, id) {
   ${appr.length ? `<section class="sec"><h4>Revisión</h4>${appr.map(a => a.status === 'pending' ? approvalRow(a) : `<p>${esc(a.title)} · <b>${st(a.status)}</b></p>`).join('')}</section>` : ''}${sourceNote(app.mode)}</div>`, size: 'tall' };
 }
 
+function coreMissionSheet(app, m) {
+  const s = app.ent.snapshot;
+  const steps = (s.steps || []).filter(x => x.mission_id === m.id).sort((a, b) => a.seq - b.seq);
+  const msgs = (s.messages || []).filter(x => x.mission_id === m.id).sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  const files = (s.deliverables || []).filter(d => d.mission_id === m.id);
+  const rs = runStats(s, { missionId: m.id });
+  const actions = m.status === 'paused' || m.status === 'needs_attention' ? [['resume', 'Reanudar']] : ['planning', 'running'].includes(m.status) ? [['pause', 'Pausar'], ['cancel', 'Cancelar']] : [];
+  return { html: `<header class="sheet-head"><div class="ic-lg">◆</div><div class="who"><small>Misión · motor multiagente</small><h3>${esc(m.title)}</h3><span class="pill mission">${st(m.status)}</span><small class="evidence">misión ${esc(m.id)}</small></div><button class="close" data-action="back" aria-label="Atrás">‹</button></header>
+  <div class="sheet-body"><section class="sec"><h4>Encargo del CEO</h4><p>${esc(m.objective || '')}</p>${m.last_error ? `<p class="err">${esc(m.last_error)}</p>` : ''}</section>
+  <section class="sec"><h4>Ejecución real</h4><div class="kpis"><div class="kpi"><b>${rs.total}</b><small>llamadas de IA</small></div><div class="kpi"><b>${rs.tokens.toLocaleString('es-MX')}</b><small>tokens</small></div><div class="kpi"><b>${msgs.length}</b><small>mensajes</small></div><div class="kpi"><b>${files.length}</b><small>archivos</small></div></div><p class="muted small">${esc(rs.models.join(', ') || 'Sin ejecuciones todavía')}${rs.retries ? ` · ${rs.retries} reintentos` : ''}</p></section>
+  <section class="sec"><h4>Etapas</h4>${steps.map(x => stepCard(app, x)).join('') || '<p class="muted">Ulises aún no registra el plan.</p>'}</section>
+  <section class="sec"><h4>Conversación entre agentes</h4>${msgs.slice(-24).map(x => relayMsg(x)).join('') || '<p class="muted">Sin mensajes.</p>'}</section>
+  ${files.length ? `<section class="sec"><h4>Archivos</h4>${files.map(fileRow).join('')}</section>` : ''}
+  ${actions.length ? `<section class="sec"><h4>Control del CEO</h4><div class="row wrap">${actions.map(([a, l]) => `<button class="btn ghost" data-action="mission-op" data-op="${a}" data-id="${esc(m.id)}">${l}</button>`).join('')}</div><p class="muted small">Cada acción llama a <code>pulse-core</code>; el estado mostrado es el que devuelve el servidor.</p></section>` : ''}${sourceNote(app.mode)}</div>`, size: 'tall' };
+}
+
 export function missionSheet(app, id) {
   const s = app.ent.snapshot; const m = (s.missions || []).find(x => x.id === id);
+  if (m && isCore(m)) return coreMissionSheet(app, m);
   if (!m) return { html: `<header class="sheet-head"><div class="who"><h3>Misión</h3></div><button class="close" data-action="back">‹</button></header><div class="sheet-body"><p class="muted">Misión no disponible.</p></div>`, size: 'mid' };
   const steps = (s.steps || []).filter(x => x.mission_id === id).sort((a, b) => a.seq - b.seq);
   const actions = [['pause', 'Pausar'], ['resume', 'Reanudar'], ['retry', 'Reintentar'], ['revise', 'Pedir revisión']];
@@ -120,12 +198,12 @@ export function missionSheet(app, id) {
 
 export function missionsSheet(app) {
   const s = app.ent.snapshot;
-  const list = (s.missions || []).map(m => { const steps = (s.steps || []).filter(x => x.mission_id === m.id); const done = steps.filter(x => x.status === 'completed').length; return `<button class="row-item" data-action="mission" data-id="${esc(m.id)}"><span class="ic mission">◆</span><span><b>${esc(m.title)}</b><small>${st(m.status)} · ${done}/${steps.length} etapas · ${ago(m.updated_at || m.created_at)}</small></span><span class="dots">${steps.sort((a, b) => a.seq - b.seq).map(x => `<i class="${esc(String(x.status).toLowerCase())}"></i>`).join('')}</span></button>`; }).join('');
+  const list = (s.missions || []).map(m => { const steps = (s.steps || []).filter(x => x.mission_id === m.id); const done = steps.filter(x => x.status === 'completed').length; return `<button class="row-item" data-action="mission" data-id="${esc(m.id)}"><span class="ic mission">◆</span><span><b>${esc(m.title)}</b><small>${isCore(m) ? 'Multiagente · ' : 'Motor anterior · '}${st(m.status)} · ${done}/${steps.length} etapas · ${ago(m.updated_at || m.created_at)}</small></span><span class="dots">${steps.sort((a, b) => a.seq - b.seq).map(x => `<i class="${esc(String(x.status).toLowerCase())}"></i>`).join('')}</span></button>`; }).join('');
   return { html: `<header class="sheet-head"><div class="ic-lg">◆</div><div class="who"><small>Gestión de misiones</small><h3>Misiones</h3></div><button class="close" data-action="close">×</button></header><div class="sheet-body">${app.connected ? `${createMissionForm()}<section class="sec"><h4>Registradas</h4>${list || '<p class="muted">Sin misiones registradas.</p>'}</section>${sourceNote(app.mode)}` : lockedBody()}</div>`, size: 'tall' };
 }
 
 function createMissionForm() {
-  return `<form class="sec mission-form" data-action="create-mission"><h4>Convocar misión</h4><input name="title" maxlength="120" placeholder="Título (5–120 caracteres)" required><textarea name="objective" rows="3" maxlength="1500" placeholder="Objetivo: qué debe lograr y qué esperas recibir (20–1500 caracteres)" required></textarea><button class="btn">Crear misión</button><p class="muted small">El servidor asigna etapas y departamentos. Puede consumir cuota de IA.</p></form>`;
+  return `<form class="sec mission-form" data-action="create-mission"><h4>Convocar misión</h4><input name="title" maxlength="120" placeholder="Título (5–120 caracteres)" required><textarea name="objective" rows="3" maxlength="1500" placeholder="Objetivo: qué debe lograr y qué esperas recibir (20–1500 caracteres)" required></textarea><button class="btn">Crear misión</button><p class="muted small">La registra <code>pulse-core</code>: Ulises planifica y reparte etapas, Calidad revisa cada entrega y los archivos quedan en Storage. Usa cuota gratuita de Gemini.</p></form>`;
 }
 
 export function approvalsSheet(app, dept = null) {
@@ -137,7 +215,7 @@ export function approvalsSheet(app, dept = null) {
 
 export function filesSheet(app, dept = null) {
   const s = app.ent.snapshot;
-  const files = (s.deliverables || []).filter(f => !dept || (s.tasks || []).some(t => t.id === f.task_id && t.department === dept));
+  const files = (s.deliverables || []).filter(f => !dept || (s.tasks || []).some(t => t.id === f.task_id && t.department === dept) || (CORE_AGENT_BY_DEPT[dept] && f.agent_id === CORE_AGENT_BY_DEPT[dept]));
   return { html: `<header class="sheet-head"><div class="ic-lg file">⤓</div><div class="who"><small>${dept ? esc(dept) : 'Biblioteca'}</small><h3>Entregables</h3></div><button class="close" data-action="close">×</button></header><div class="sheet-body">${app.connected ? `<section class="sec">${files.slice(0, 40).map(fileRow).join('') || '<p class="muted">Sin entregables registrados.</p>'}</section><p class="muted small">Las descargas usan una URL firmada de Storage válida 2 minutos.</p>${sourceNote(app.mode)}` : lockedBody()}</div>`, size: 'tall' };
 }
 
@@ -152,7 +230,7 @@ export function directorySheet(app) {
 
 export function accessSheet(app, step = 'email', email = '') {
   if (app.mode === 'demo') return { html: `<header class="sheet-head"><div class="ic-lg sim">▶</div><div class="who"><small>Modo actual</small><h3>Simulación local</h3></div><button class="close" data-action="close">×</button></header><div class="sheet-body"><p>Estás viendo datos inventados <b>solo para probar la interfaz</b>. No hay conexión con Supabase ni con Gemini y nada se guarda.</p><p class="muted">Prueba: toca un agente → Conversación → escribe una instrucción. Incluye la palabra «propuesta» para generar una revisión, o «falla» para ver un error.</p><div class="row"><button class="btn" data-action="exit-demo">Salir de la simulación</button></div></div>`, size: 'mid' };
-  if (app.connected) return { html: `<header class="sheet-head"><div class="ic-lg ok">✓</div><div class="who"><small>Sesión</small><h3>CEO conectado</h3></div><button class="close" data-action="close">×</button></header><div class="sheet-body"><p>${esc(app.ent.user?.email || '')}</p><p class="muted">Los estados de los agentes provienen de <code>pulse_tasks</code>, <code>pulse_approvals</code> y <code>pulse_mission_steps</code>. Se consultan cada 10 s y cada 2.5 s mientras un encargo está en curso.</p>${app.ent.lastError ? `<p class="err">Última consulta falló: ${esc(app.ent.lastError)}</p>` : ''}<div class="row"><button class="btn ghost" data-action="refresh">Actualizar ahora</button><button class="btn ghost" data-action="logout">Cerrar sesión</button></div></div>`, size: 'mid' };
+  if (app.connected) return { html: `<header class="sheet-head"><div class="ic-lg ok">✓</div><div class="who"><small>Sesión</small><h3>CEO conectado</h3></div><button class="close" data-action="close">×</button></header><div class="sheet-body"><p>${esc(app.ent.user?.email || '')}</p><p class="muted">Los estados provienen de Supabase: «Recibiendo» = instrucción o etapa registrada sin llamadas al modelo todavía; «Trabajando» = filas en <code>pulse_runs</code>; «Resultado recibido» = etapa aprobada por Calidad con su mensaje de resultado. También se leen <code>pulse_tasks</code>, <code>pulse_approvals</code> y <code>pulse_agent_messages</code>. Se consultan cada 10 s, o cada 2.5 s con trabajo en curso.</p>${app.ent.lastError ? `<p class="err">Última consulta falló: ${esc(app.ent.lastError)}</p>` : ''}<div class="row"><button class="btn ghost" data-action="refresh">Actualizar ahora</button><button class="btn ghost" data-action="logout">Cerrar sesión</button></div></div>`, size: 'mid' };
   const body = step === 'email'
     ? `<form class="sec" data-action="login"><h4>Enlace de acceso</h4><input type="email" name="email" autocomplete="email" placeholder="Correo del CEO" required value="${esc(email)}"><button class="btn">Enviar enlace</button><p class="muted small">Solo funciona con la cuenta autorizada (no crea usuarios).</p></form>`
     : `<section class="sec"><p>Revisa tu correo (${esc(email)}).</p><p class="muted small">Si el enlace abre la app anterior en lugar de esta vista, <b>no lo abras</b>: mantén pulsado el enlace, cópialo y pégalo aquí.</p><form data-action="verify-link"><input name="link" placeholder="Pega el enlace del correo" autocomplete="off"><button class="btn">Entrar con el enlace</button></form><form data-action="verify-code"><input name="code" inputmode="numeric" maxlength="8" placeholder="o el código de 6 dígitos, si aparece"><button class="btn ghost">Entrar con código</button></form><button class="chip" data-action="access-reset">Usar otro correo</button></section>`;

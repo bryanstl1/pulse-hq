@@ -7,7 +7,9 @@ const BUBBLES = {
   failed: { icon: '⚠︎', text: 'Falló', cls: 'fail' },
   mission: { icon: '◆', text: 'En misión', cls: 'mission' },
   completed: { icon: '✓', text: 'Resultado', cls: 'done' },
-  sending: { icon: '…', text: 'Recibiendo encargo', cls: 'local' }
+  receiving: { icon: '↓', text: 'Recibiendo', cls: 'recv' },
+  // solo local: el navegador está enviando; el servidor aún no confirmó nada
+  sending: { icon: '…', text: 'Enviando…', cls: 'local' }
 };
 
 // Etiquetas que siguen a los agentes y marcas tocables sobre objetos interactivos.
@@ -58,12 +60,13 @@ export class Overlay {
       tag.style.display = visible ? '' : 'none';
       if (!visible) continue;
       tag.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px)`;
-      const kind = ag.local?.kind === 'sending' ? 'sending' : ag.intent.kind;
+      // un estado verificable del servidor siempre gana al indicador local de envío
+      const kind = ag.local?.kind === 'sending' && !['receiving', 'running'].includes(ag.intent.kind) ? 'sending' : ag.intent.kind;
       const bub = BUBBLES[kind];
       const bubble = tag.firstElementChild;
       if (bub) {
         bubble.hidden = false;
-        const label = kind === 'mission' && ag.intent.mission ? `Misión · etapa ${ag.intent.mission.seq}` : kind === 'review' && ag.intent.approvals?.length > 1 ? `${ag.intent.approvals.length} revisiones` : bub.text;
+        const label = kind === 'mission' && ag.intent.mission ? `Misión · etapa ${ag.intent.mission.seq}` : kind === 'review' && ag.intent.approvals?.length > 1 ? `${ag.intent.approvals.length} revisiones` : kind === 'completed' && ag.intent.label === 'Resultado recibido' ? 'Resultado recibido' : bub.text;
         const html = `<b>${bub.icon}</b><em>${label}</em>`;
         if (bubble.dataset.html !== html) { bubble.innerHTML = html; bubble.dataset.html = html; bubble.className = `bubble ${bub.cls}`; }
       } else if (ag.emote && ag.intent.source !== 'server' || (ag.emote && ag.intent.kind === 'idle')) {

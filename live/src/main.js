@@ -70,7 +70,7 @@ let pollTimer = null;
 function schedulePoll() {
   clearTimeout(pollTimer);
   if (!app.connected) return;
-  const fast = Object.values(app.sending).some(Boolean) || app.agents.some(a => a.intent.kind === 'running' || a.intent.kind === 'mission');
+  const fast = Object.values(app.sending).some(Boolean) || app.agents.some(a => ['receiving', 'running', 'mission'].includes(a.intent.kind));
   pollTimer = setTimeout(async () => { try { await app.ent.refresh(); } catch { } recompute(); schedulePoll(); }, fast ? 2500 : 10000);
 }
 
@@ -97,7 +97,7 @@ function recompute() {
   schedulePoll();
 }
 
-const LAMP = { running: '#3cd17a', review: '#f2b33d', failed: '#e5484d', mission: '#4a90e2', completed: '#7ed6a5' };
+const LAMP = { receiving: '#8f7cf0', running: '#3cd17a', review: '#f2b33d', failed: '#e5484d', mission: '#4a90e2', completed: '#7ed6a5' };
 function setLamp(roomId, kind) {
   const m = office.lamps[roomId]; if (!m) return;
   const c = LAMP[kind]; m.userData.kind = kind;
@@ -262,7 +262,7 @@ sheetEl.addEventListener('click', async e => {
     else if (act === 'file') await openFile(id);
     else if (act === 'decide') { if (!confirmTwice(el)) return; el.disabled = true; await app.ent.decideApproval(id, el.dataset.choice); toast(`${el.dataset.choice === 'approved' ? 'Aprobación' : 'Rechazo'} registrado${app.mode === 'demo' ? ' en la simulación' : ' en el servidor'}`, 'ok'); recompute(); renderSheet(true); }
     else if (act === 'retry') { const t = app.ent.snapshot.tasks.find(x => x.id === id); if (t) await sendInstruction(t.department, t.instruction); }
-    else if (act === 'mission-op') { if (!confirmTwice(el)) return; el.disabled = true; await app.ent.missionAction(el.dataset.op, id); toast('Acción enviada a pulse-mission-control', 'ok'); recompute(); }
+    else if (act === 'mission-op') { if (!confirmTwice(el)) return; el.disabled = true; await app.ent.missionAction(el.dataset.op, id); toast(app.mode === 'demo' ? 'Acción aplicada en la simulación' : 'El servidor confirmó la acción', 'ok'); recompute(); renderSheet(true); }
     else if (act === 'access') openSheet({ type: 'access' });
     else if (act === 'demo') { closeSheet(); await startDemo(); toast('Simulación local activada · datos inventados', 'warn'); }
     else if (act === 'exit-demo') { app.ent?.client?.dispose?.(); app.ent = null; app.mode = 'none'; closeSheet(); history.replaceState(null, '', location.pathname + location.hash); await startLive(); }
@@ -283,7 +283,7 @@ sheetEl.addEventListener('submit', async e => {
   const btn = f.querySelector('button');
   try {
     if (act === 'send') { const a = app.agentsById[app.sheet.id]; await sendInstruction(a.dept, data.instruction || ''); }
-    else if (act === 'create-mission') { btn.disabled = true; await app.ent.createMission(data.title || '', data.objective || ''); toast(app.mode === 'demo' ? 'Misión creada en la simulación' : 'Misión registrada por pulse-mission-control', 'ok'); recompute(); renderSheet(); }
+    else if (act === 'create-mission') { btn.disabled = true; const r = await app.ent.createMission(data.title || '', data.objective || ''); toast(app.mode === 'demo' ? 'Misión creada en la SIMULACIÓN' : `Misión registrada en Supabase · ${String(r.missionId || '').slice(0, 8)}`, 'ok'); recompute(); renderSheet(); }
     else if (act === 'login') { btn.disabled = true; app.accessEmail = data.email; await app.ent.requestLogin(data.email); app.accessStep = 'sent'; renderSheet(); }
     else if (act === 'verify-link') { btn.disabled = true; await app.ent.verifyLink(data.link); toast('Sesión iniciada', 'ok'); closeSheet(); await app.ent.refresh(); recompute(); }
     else if (act === 'verify-code') { btn.disabled = true; await app.ent.verifyCode(app.accessEmail, data.code); toast('Sesión iniciada', 'ok'); closeSheet(); await app.ent.refresh(); recompute(); }
@@ -296,14 +296,21 @@ sheetEl.addEventListener('input', e => { if (e.target.name === 'instruction') { 
 
 async function sendInstruction(dept, text) {
   const value = String(text).trim();
-  if (value.length < 5) { toast('Escribe al menos 5 caracteres.', 'warn'); return; }
+  const toUlises = dept === 'Dirección estratégica';
+  if (value.length < (toUlises ? 20 : 5)) { toast(toUlises ? 'Describe el encargo para Ulises con al menos 20 caracteres.' : 'Escribe al menos 5 caracteres.', 'warn'); return; }
   if (app.sending[dept]) return;
   const agent = app.agents.find(a => a.dept === dept);
+  // indicador local «Enviando…» hasta que el servidor confirme; después mandan los registros de Supabase
   app.sending[dept] = true; agent.receiveInstruction();
   renderSheet(); schedulePoll();
   try {
-    await app.ent.runTask(dept, value);
-    toast(app.mode === 'demo' ? `${agent.def.name}: resultado simulado listo` : `${agent.def.name}: el servidor registró el resultado`, 'ok');
+    if (toUlises) {
+      const r = await app.ent.askUlises(value);
+      toast(app.mode === 'demo' ? 'Ulises recibió la misión en la SIMULACIÓN' : `Instrucción registrada en Supabase · misión ${String(r.missionId || '').slice(0, 8)}`, 'ok');
+    } else {
+      await app.ent.runTask(dept, value);
+      toast(app.mode === 'demo' ? `${agent.def.name}: resultado simulado listo` : `${agent.def.name}: el servidor registró el resultado`, 'ok');
+    }
   } catch (err) {
     toast(`No se completó: ${err.message}`, 'error');
     try { await app.ent.refresh(); } catch { }
@@ -371,7 +378,7 @@ function tick(dt, now, draw = true) {
     if (Math.abs(stage.camX - ROOMS.findIndex(r => r.id === an.room) * PITCH) > PITCH * 1.6) continue;
     an.fn(t, an.room === 'technology' && app.agentsById['a-technology'].intent.kind === 'running');
   }
-  for (const m of Object.values(office.lamps)) if (m.userData.kind === 'running' || m.userData.kind === 'review') m.emissiveIntensity = 0.7 + Math.sin(t * 5) * 0.6;
+  for (const m of Object.values(office.lamps)) if (m.userData.kind === 'running' || m.userData.kind === 'review' || m.userData.kind === 'receiving') m.emissiveIntensity = 0.7 + Math.sin(t * 5) * 0.6;
   if (highlight.obj) {
     highlight.t += dt; const k = highlight.t;
     const s = 1 + Math.sin(Math.min(1, k / 0.45) * Math.PI) * 0.07;
