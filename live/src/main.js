@@ -30,7 +30,7 @@ const stage = new Stage($('#stage'), { roomCount: ROOMS.length, onTap: handleTap
 await loadFurniture('./assets/furniture', p => { loaderBar.style.width = `${Math.round(p * 80)}%`; }, { bundle: globalThis.PULSE_FURNITURE_BUNDLE || null });
 const office = buildOffice(stage.scene);
 app.stage = stage; app.office = office;
-const worldCtx = { scene: stage.scene, nav: office.nav, stationsByRoom: office.stationsByRoom, someoneOnBreak: null };
+const worldCtx = { scene: stage.scene, nav: office.nav, stationsByRoom: office.stationsByRoom, pitch: PITCH };
 app.agents = createAgents(worldCtx);
 app.agents.forEach(a => { app.agentsById[a.def.id] = a; });
 const overlay = new Overlay($('#overlay'), stage, { onAgent: id => selectAgent(id), onHotspot: (key, room) => openHotspot(key, room) });

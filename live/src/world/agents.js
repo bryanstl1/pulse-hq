@@ -50,7 +50,7 @@ export class AgentController {
   setIntent(intent) {
     const prev = this.intent; this.intent = intent;
     if (prev.kind === intent.kind && prev.taskId === intent.taskId && prev.mission?.id === intent.mission?.id) return;
-    if (prev.kind === 'running' && intent.kind === 'completed') this.celebrate = 2.2;
+    if (prev.kind === 'running' && intent.kind === 'completed') { this.celebrate = 2.2; this.world.broadcast?.('done', this); }
     this.plan(true);
   }
 
@@ -75,7 +75,8 @@ export class AgentController {
   get isSitting() { return this.atStation(this.stations.desk, 0.3) && ['sit', 'type', 'sleep'].includes(this.anim.pose); }
 
   plan(force = false) {
-    this.emote = null;
+    this.emote = null; this.emoteOnArrive = null;
+    if (this.social) this.endSocial();
     if (this.selected && !this.hasDuty()) return;
     const k = this.intent.kind;
     const desk = this.stations.desk;
@@ -93,6 +94,8 @@ export class AgentController {
     if (force) this.ambientTimer = 0.2 + Math.random() * 1.5;
   }
 
+  endSocial() { const o = this.social?.with; this.social = null; if (o?.social?.with === this) { o.social = null; o.emote = null; o.ambientTimer = Math.min(o.ambientTimer, 1.5); } }
+
   goSit(desk, pose) {
     if (this.atStation(desk, 0.3)) { this.sitDown(pose); return; }
     this.walkTo(desk, () => this.sitDown(pose));
@@ -105,24 +108,82 @@ export class AgentController {
   }
   standAt(st, pose) { this.anim.seatY = 0; this.forceSit = false; this.goalFacing = THREE.MathUtils.degToRad(st.face || 0); this.anim.pose = pose; this.mode = 'station'; }
 
+  // ——— Comportamiento ambiental (decorativo; nunca representa trabajo de IA) ———
+  // Máquina de estados: puesto propio · visita a un compañero · café en Descanso · escritorio.
+  // Los sitios se reservan para que dos agentes no ocupen el mismo lugar.
+  reserve(st) {
+    const res = this.world.reserved;
+    for (const [k, id] of res) if (id === this.def.id) res.delete(k);
+    if (st) res.set(`${st.room}:${st.key}`, this.def.id);
+  }
+  isFree(st) { const id = this.world.reserved.get(`${st.room}:${st.key}`); return !id || id === this.def.id; }
+  get idleAmbient() { return !this.selected && !this.local && !this.hasDuty() && this.ambientEnabled && !this.social && (this.intent.source !== 'server' || ['idle', 'completed'].includes(this.intent.kind)); }
+
   ambientStep() {
-    // estaciones del propio cuarto; de vez en cuando, una pausa de café
-    const keys = Object.keys(this.stations).filter(k => k !== 'door');
-    let st;
-    if (Math.random() < 0.07 && !this.world.someoneOnBreak) {
-      const rest = this.world.stationsByRoom.rest; const spots = [rest.coffee, rest.coffee2, rest.cooler, rest.sofa, rest.sofa2];
-      st = spots[Math.floor(Math.random() * spots.length)]; this.world.someoneOnBreak = this.def.id;
-    } else {
-      if (this.world.someoneOnBreak === this.def.id) this.world.someoneOnBreak = null;
-      st = this.stations[keys[Math.floor(Math.random() * keys.length)]];
-    }
-    const poses = { desk: 'sit', board: 'think', shelf: 'read', plant: 'idle', window: 'idle', coffee: 'idle', cooler: 'idle', sofa: 'idle' };
+    const r = Math.random();
+    if (r < 0.2 && this.tryVisit()) return;
+    if (r < 0.32 && this.tryCoffee()) return;
+    const keys = Object.keys(this.stations).filter(k => k !== 'door' && this.isFree(this.stations[k]));
+    const st = this.stations[keys[Math.floor(Math.random() * keys.length)]] || this.stations.desk;
+    const poses = { desk: 'sit', board: 'think', shelf: 'read', plant: 'idle', window: 'idle' };
     const pose = poses[st.key] || (Math.random() < 0.5 ? 'idle' : 'think');
-    // gesto ambiental (decorativo, nunca indica trabajo)
-    const EMOTE = { shelf: '📖', board: '💭', coffee: '☕', coffee2: '☕', cooler: '💧', sofa: '🛋', sofa2: '🛋', plant: '🌿', window: '🌤' };
-    this.emote = EMOTE[st.key] || (pose === 'think' ? '💭' : null);
-    if (st.key === 'desk') { const nap = Math.random() < 0.25; this.emote = nap ? '💤' : null; this.goSit(st, nap ? 'sleep' : 'sit'); } else this.goStand(st, pose);
-    this.ambientTimer = 6 + Math.random() * 8;
+    const EMOTE = { shelf: '📖', board: '💭', plant: '🌿', window: '🌤' };
+    this.reserve(st);
+    if (st.key === 'desk') { const nap = Math.random() < 0.2; this.goSit(st, nap ? 'sleep' : 'sit'); this.emoteOnArrive = nap ? '💤' : null; }
+    else { this.goStand(st, pose); this.emoteOnArrive = EMOTE[st.key] || (pose === 'think' ? '💭' : null); }
+    this.ambientTimer = 7 + Math.random() * 9;
+  }
+
+  tryVisit() {
+    const mine = Math.round(this.pos.x / this.world.pitch);
+    const hosts = this.world.agents.filter(o => o !== this && o.idleAmbient && !o.path.length && Math.abs(Math.round(o.pos.x / this.world.pitch) - mine) <= 2 && Math.abs(Math.round(o.pos.x / this.world.pitch) - mine) >= 1);
+    if (!hosts.length) return false;
+    const host = hosts[Math.floor(Math.random() * hosts.length)];
+    // punto libre a ~0.9 m del anfitrión, del lado por el que llega
+    const side = Math.sign(this.pos.x - host.pos.x) || 1;
+    const spot = { wx: host.pos.x + side * 0.85, wz: host.pos.y + 0.35, room: host.def.room, key: `visit-${host.def.id}` };
+    if (!this.world.nav.isFreeAt(spot.wx, spot.wz)) { spot.wx = host.pos.x; spot.wz = host.pos.y + 0.9; }
+    if (!this.world.nav.isFreeAt(spot.wx, spot.wz)) return false;
+    const limit = performance.now() + 30000; // nadie espera para siempre
+    host.social = { with: this, until: limit, waiting: true };
+    this.social = { with: host, until: limit };
+    this.reserve(spot);
+    this.walkTo(spot, () => {
+      const dur = 5 + Math.random() * 4;
+      this.faceTowards(host); this.anim.seatY = 0; this.forceSit = false; this.anim.pose = 'talk'; this.emote = '💬';
+      this.social = { with: host, until: performance.now() + dur * 1000 };
+      if (host.social?.with === this) {
+        host.path = []; host.arrive = null; host.anim.seatY = host.isSitting ? host.anim.seatY : 0;
+        if (!host.isSitting) host.faceTowards(this);
+        host.anim.pose = host.isSitting ? 'sit' : 'talk'; host.emote = '💬';
+        host.social = { with: this, until: performance.now() + dur * 1000 };
+      }
+      this.ambientTimer = dur;
+    });
+    this.ambientTimer = 30;
+    return true;
+  }
+
+  tryCoffee() {
+    const rest = this.world.stationsByRoom.rest;
+    const spots = ['coffee', 'coffee2', 'cooler', 'sofa', 'sofa2'].map(k => rest[k]).filter(st => this.isFree(st));
+    const away = this.world.agents.filter(o => o.def.room !== 'rest' && o.awayFromRoom && !o.hasDuty()).length;
+    if (!spots.length || away >= 3) return false;
+    const st = spots[Math.floor(Math.random() * spots.length)];
+    this.reserve(st);
+    this.goStand(st, 'idle');
+    this.emoteOnArrive = st.key.startsWith('sofa') ? '🛋' : st.key === 'cooler' ? '💧' : '☕';
+    this.ambientTimer = 10 + Math.random() * 8;
+    return true;
+  }
+
+  faceTowards(o) { this.goalFacing = Math.atan2(o.pos.x - this.pos.x, o.pos.y - this.pos.y); }
+
+  /** Reacción breve a un evento real de un compañero (p. ej. terminó un encargo registrado). */
+  react(type, src) {
+    if (src === this || !this.idleAmbient || this.path.length) return;
+    if (Math.hypot(src.pos.x - this.pos.x, src.pos.y - this.pos.y) > 7) return;
+    if (type === 'done') { if (!this.isSitting) { this.faceTowards(src); this.anim.pose = 'celebrate'; } this.emote = '👏'; this.reactUntil = performance.now() + 2200; }
   }
 
   update(dt) {
@@ -130,6 +191,9 @@ export class AgentController {
     if (this.waveTimer > 0) { this.waveTimer -= dt; if (this.waveTimer <= 0 && this.selected && !this.hasDuty()) a.pose = this.isSitting ? 'sit' : 'talk'; }
     if (this.celebrate > 0) { this.celebrate -= dt; if (this.celebrate <= 0) this.plan(true); }
     if (this.local && performance.now() > this.local.until) this.clearLocal();
+    const now = performance.now();
+    if (this.social && now > this.social.until) { this.endSocial(); this.emote = null; if (!this.path.length && !this.isSitting) this.anim.pose = 'idle'; }
+    if (this.reactUntil && now > this.reactUntil) { this.reactUntil = 0; this.emote = null; if (!this.isSitting && !this.path.length) this.anim.pose = 'idle'; }
 
     // seguir la ruta
     if (this.path.length) {
@@ -144,12 +208,21 @@ export class AgentController {
         this.goalFacing = Math.atan2(dx, dz);
         a.speed = speed;
       }
-      if (!this.path.length && this.arrive) { const cb = this.arrive.onArrive; const st = this.arrive.station; this.arrive = null; this.pos.set(st.wx, st.wz); a.speed = 0; cb?.(); }
+      if (!this.path.length && this.arrive) { const cb = this.arrive.onArrive; const st = this.arrive.station; this.arrive = null; this.pos.set(st.wx, st.wz); a.speed = 0; cb?.(); if (this.emoteOnArrive) { this.emote = this.emoteOnArrive; this.emoteOnArrive = null; } }
+      // separación: evita encimarse con otros agentes al caminar
+      for (const o of this.world.agents) {
+        if (o === this) continue;
+        const ox = this.pos.x - o.pos.x, oz = this.pos.y - o.pos.y, d = Math.hypot(ox, oz);
+        if (d > 0.001 && d < 0.5) {
+          const push = (0.5 - d) * 2.5 * dt, nx = this.pos.x + ox / d * push, nz = this.pos.y + oz / d * push;
+          if (this.world.nav.isFreeAt(nx, nz)) this.pos.set(nx, nz);
+        }
+      }
     } else { a.speed = 0; }
 
     // paseo ambiental solo sin intención del servidor ni acción local
     const ambientAllowed = !this.selected && !this.local && (this.intent.source !== 'server' || this.intent.kind === 'idle' || (this.intent.kind === 'completed' && !this.celebrate));
-    if (ambientAllowed && this.ambientEnabled && !this.path.length) {
+    if (ambientAllowed && this.ambientEnabled && !this.path.length && !this.social) {
       this.ambientTimer -= dt;
       if (this.ambientTimer <= 0) this.ambientStep();
     }
@@ -167,5 +240,11 @@ export class AgentController {
 }
 
 export function createAgents(world) {
-  return AGENTS.map(def => new AgentController(def, world));
+  world.reserved = new Map();
+  const agents = AGENTS.map(def => new AgentController(def, world));
+  world.agents = agents;
+  world.broadcast = (type, src) => agents.forEach(a => a.react(type, src));
+  // escalonar: cada agente arranca su rutina en un momento distinto
+  agents.forEach((a, i) => { a.ambientTimer = 0.8 + i * 0.9 + Math.random() * 2; });
+  return agents;
 }

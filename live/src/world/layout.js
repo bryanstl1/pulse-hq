@@ -264,11 +264,19 @@ const LAYOUTS = {
   })
 };
 
+// Departamentos espejados: alternan la distribución para que las salas contiguas no se vean iguales.
+const MIRRORED = new Set(['marketing', 'sales', 'events', 'intelligence', 'technology']);
+function mirror(local) {
+  const flip = o => ({ ...o, x: -o.x, r: o.r ? -o.r : o.r, face: o.face ? -o.face : o.face });
+  return { items: local.items.map(flip), stations: Object.fromEntries(Object.entries(local.stations).map(([k, v]) => [k, flip(v)])) };
+}
+
 /** Devuelve la planta completa en coordenadas de mundo. */
 export function buildLayout() {
   return ROOMS.map((room, index) => {
     const cx = roomCenterX(index);
-    const local = LAYOUTS[room.id](room);
+    const raw = LAYOUTS[room.id](room);
+    const local = MIRRORED.has(room.id) ? mirror(raw) : raw;
     const items = local.items.map(it => { const x = it.x * S, z = (it.z === D_BACK ? BACK_Z : it.z * S); return { ...it, x, z, room: room.id, wx: cx + x, wz: z }; });
     const stations = Object.fromEntries(Object.entries(local.stations).map(([k, st]) => [k, { ...st, room: room.id, wx: cx + st.x * S, wz: st.z * S, key: k }]));
     return { room, index, cx, items, stations };
