@@ -17,3 +17,23 @@ Revisión de navegación móvil: en una vista compacta de 390 × 844 px del nave
 Pulido de salas: se sustituyó el recorte del mapa compartido en móvil por cinco escenas ilustradas individuales y se comprobaron visualmente Dirección, Estudio, Tecnología, Encuentro y Juntas en el navegador. La revisión detectó que la transformación de escala de una sala inactiva alteraba el cálculo de anchura y desplazaba las salas posteriores; ahora se usa el ancho de diseño para centrar cada una. El módulo 3D se carga solo en escritorio. La diferencia estética entre los agentes pixel art y la ilustración pintada queda abierta a la valoración del CEO.
 
 El prototipo no implementa las diez áreas, el historial de tareas, descargas, aprobación real ni conexión con Supabase. Esos componentes pertenecen a las etapas C y D, condicionadas por validación visual. No se declaró completado el control de calidad de la aplicación final.
+
+## Expansión móvil posterior a la aprobación visual
+
+El catálogo móvil ahora muestra diez departamentos y seis espacios especiales; el edificio de escritorio mantiene cinco ambientes. `npm run build` terminó con Vite 7.1.12: módulo principal 24,83 kB bruto / 9,43 kB gzip y módulo 3D separado 586,79 kB bruto / 152,03 kB gzip. `npm test` pasó 4/4, centrado en no atribuir ejecuciones ficticias. La carpeta `dist` mide aproximadamente 5,5 MB, con dieciséis imágenes de sala y los atlas de personajes.
+
+Se abrió el navegador en una vista móvil de 390 × 844 px. Se inspeccionaron Dirección, Marketing, Finanzas, oficina del CEO, colaboración y descanso. Las imágenes completas se renderizaron, el selector saltó a las salas 02/16, 09/16, 11/16 y 16/16, y la ficha de Marketing mostró el retrato y la indicación «Sin conexión / No consultada». Se guardaron capturas reales de Marketing, oficina del CEO y descanso. La transición horizontal funciona mediante indicadores y flechas; la verificación de gesto táctil en Safari físico, FPS y memoria permanece pendiente.
+
+El catálogo es visual: las diez apariencias no están vinculadas aún a contratos ni registros de agentes existentes. La conectividad de Supabase, las aprobaciones, los entregables y la persistencia no se han probado en esta expansión. El texto anterior sobre ausencia de diez áreas corresponde a la etapa B inicial y queda supersedido solo para el catálogo visual móvil.
+
+## Revisión de pantalla completa
+
+Tras la observación del CEO de que la sala se veía como tarjeta, se eliminó el marco móvil: cada imagen ocupa el viewport de la aplicación y los controles se superponen. Se revisaron Dirección y Marketing en el navegador con una vista de 390 × 844 px, incluida la transición 01/16 → 02/16 y la lectura del título sobre la imagen. `npm run build` y `npm test` pasaron (4/4). La interfaz propia del visor de ChatGPT que aparece fuera de la página en el iPhone no forma parte de PULSE HQ.
+
+## Integración del avatar y motor empresarial (22 de octubre de 2026)
+
+`npm run build` terminó correctamente: Vite empaquetó 60 módulos; JS principal 262,44 kB / 73,13 kB gzip, módulo 3D separado 586,79 kB / 152,02 kB gzip. `npm test` pasó 8/8: cuatro pruebas de estados previas y cuatro nuevas sobre ausencia de ejecución sin sesión, llamada exacta a `pulse-run`, rechazo de aprobación concurrente y escape de datos del servidor.
+
+Se inspeccionó el esquema real de seis tablas de Supabase mediante consulta de solo lectura y se compararon columnas con las consultas nuevas. Se abrió la vista móvil local en navegador; tocar a Valeria abrió el panel de agente con estado «Actividad no consultada» y acceso del CEO; la pestaña Misiones mostró el acceso sin registros ficticios. Las capturas son del navegador. No se envió correo mágico, no se ejecutó Gemini ni se mutó dato empresarial; el flujo autenticado necesita URL de retorno permitida en Supabase Auth. Safari físico, medición de memoria y comportamiento real de Edge quedan pendientes.
+
+El estado `running` solo mueve visualmente al personaje si hay un registro reciente del servidor. El centro empresarial anterior sigue disponible para las capacidades que faltan en el nuevo panel. No se tocó GitHub Pages ni el código de las funciones desplegadas.
