@@ -27,13 +27,18 @@ const inspector=document.getElementById('inspector'),panel=document.getElementBy
 function renderInspector(){
  world?.updateActivity?.(name=>enterprise.user?enterprise.departmentData(name).activity:null);
  if(inspector.hidden)return;
+ inspector.dataset.view=view;
+ const previousScroll=inspector.scrollTop,focused=document.activeElement?.id;
+ const selection=focused==='agent-command'?document.activeElement.selectionStart:null;
  const room=findRoom(selected);
  if(view==='directory'){
   panel.innerHTML=`<div class="inspector-kicker">DIRECTORIO</div><h2>Explora tu compañía.</h2><p class="inspector-lead">${catalog().length} espacios ilustrados</p><div class="overview-list">${catalog().map(r=>`<button data-room-name="${safe(r.name)}"><i style="background:${r.accent}"></i><span><b>${safe(r.name)}</b><small>${safe(r.sub)}</small></span><em>↗</em></button>`).join('')}</div>`;
  }else panel.innerHTML=renderPanel(view,room,enterprise,{draft:drafts.get(selected)||'',busy,error,selectedTask:taskId,selectedMission:missionId});
+ inspector.scrollTop=previousScroll;
+ if(focused==='agent-command'&&!busy){const input=document.getElementById('agent-command');input?.focus({preventScroll:true});if(input&&selection!==null)input.setSelectionRange(selection,selection)}
  document.getElementById('connection-pill').textContent=enterprise.user?'● Conectado':'✦ Muestra visual';
 }
-function show(kind,id=null){view=kind;selected=id;error='';inspector.hidden=false;
+function show(kind,id=null){if(view!==kind||selected!==id)inspector.scrollTop=0;view=kind;selected=id;error='';inspector.hidden=false;
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===kind));
  renderInspector();if(id)world?.focus?.(id);
 }
@@ -49,7 +54,7 @@ async function run(action){
   if(action==='run'){
    const room=findRoom(selected),instruction=drafts.get(selected)||'';
    const result=await enterprise.runTask(room.name,instruction);
-   drafts.delete(selected);taskId=result.taskId||'';if(taskId){view='task';selected=null}
+   drafts.delete(selected);taskId=result.taskId||'';
   }else if(action==='mission-create'){
    const result=await enterprise.createMission(missionTitle,missionGoal);missionId=result.missionId||'';
   }else if(action==='login'){
@@ -57,7 +62,7 @@ async function run(action){
    await enterprise.requestLogin(loginEmail);error='Enlace solicitado. Revisa el correo autorizado.';
   }else if(action==='refresh')await enterprise.refresh();
   else if(action==='logout')await enterprise.signOut();
- }catch(e){error=String(e.message||e).slice(0,220)}finally{busy=false;renderInspector()}
+ }catch(e){error=String(e.message||e).slice(0,220)}finally{busy=false;renderInspector();if(action==='run'&&!error){const log=panel.querySelector('.agent-conversation');if(log)log.scrollTop=log.scrollHeight}}
 }
 async function initWorld(){
  loading.hidden=false;fallback.hidden=true;world?.destroy();world=null;
@@ -71,6 +76,8 @@ app.addEventListener('click',async e=>{
  const b=e.target.closest('button');if(!b)return;
  if(b.dataset.tab){if(b.dataset.tab==='spaces'){closePanel();world?.reset?.()}else show(b.dataset.tab);return}
  if(b.dataset.roomName){const room=catalog().find(r=>r.name===b.dataset.roomName);if(room)inspectRoom(room.id,true);return}
+ if(b.dataset.conversation){show('agent',b.dataset.conversation);return}
+ if(b.dataset.profile){show('room',b.dataset.profile);return}
  if(b.dataset.room){inspectRoom(b.dataset.room);return}
  if(b.dataset.liveView){show(b.dataset.liveView);return}
  if(b.dataset.taskId){taskId=b.dataset.taskId;show('task');return}
