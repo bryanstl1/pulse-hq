@@ -60,7 +60,7 @@ async function planMission(m: any) {
   const roster = Object.values(A).filter(a => !['ulises', 'calidad'].includes(a.id)).map(a => `- ${a.id}: ${a.name}, ${a.role}. ${a.responsibilities}`).join('\n');
   const ctx: Ctx = { user_id: m.user_id, mission_id: m.id, step_id: null, agent_id: 'ulises' };
   const system = `${ulises.instructions}\nResponde ÚNICAMENTE con un objeto JSON válido.`;
-  const user = `MISIÓN: ${m.title}\nOBJETIVO DEL CEO: ${m.objective}\n\nAGENTES DISPONIBLES:\n${roster}\n\nDevuelve: {"understanding":"qué se pide y para qué","constraints":["restricciones"],"deliverables":["entregables finales"],"tasks":[{"seq":1,"agent":"id","title":"título corto","directive":"instrucción concreta y autocontenida, con el resultado esperado","depends_on":[],"acceptance":["criterio verificable"],"output_format":"markdown"}]}\nREGLAS: entre 3 y ${LIMITS.maxPlanTasks} tareas; usa solo los ids listados; depends_on solo puede citar tareas anteriores; si se necesita evidencia externa, la primera tarea es de iris; las cifras y presupuestos van con tomas en "output_format":"xlsx"; el resto en "markdown"; no incluyas la consolidación final, la hará Ulises.`;
+  const user = `MISIÓN: ${m.title}\nOBJETIVO DEL CEO: ${m.objective}\n\nAGENTES DISPONIBLES:\n${roster}\n\nDevuelve: {"understanding":"qué se pide y para qué","constraints":["restricciones"],"deliverables":["entregables finales"],"tasks":[{"seq":1,"agent":"id","title":"título corto","directive":"instrucción concreta y autocontenida, con el resultado esperado","depends_on":[],"acceptance":["criterio verificable"],"output_format":"markdown"}]}\nREGLAS: entre 3 y ${LIMITS.maxPlanTasks} tareas; usa solo los ids listados; depends_on solo puede citar tareas anteriores; si se necesita evidencia externa, la primera tarea es de iris; las cifras y presupuestos van con tomas en "output_format":"xlsx"; el resto en "markdown"; no incluyas la consolidación final, la hará Ulises; no atribuyas al solicitante un perfil, audiencia o cifras que no estén en el objetivo: si faltan, ordena que se declaren como supuestos; para investigar varias marcas o empresas pide a iris como máximo 5 y evidencia por cada una.`;
   const out = await llm(ctx, 'plan', 'smart', system, user, 2500);
   const plan = parseJson<any>(out.text);
   const valid = new Set(Object.keys(A).filter(id => !['ulises', 'calidad'].includes(id)));
@@ -161,7 +161,17 @@ async function saveFile(m: any, step: any, taskId: string, bytes: Uint8Array, na
   const path = `${m.user_id}/core/${m.id}/${step.seq}-v${step.attempt + 1}-${name}`;
   const up = await db.storage.from(BUCKET).upload(path, bytes, { contentType: mime, upsert: true });
   if (up.error) throw new Error(`No se pudo guardar el archivo: ${up.error.message}`);
-  const { data, error } = await db.from('pulse_deliverables').insert({ user_id: m.user_id, task_id: taskId, variant, title: title.slice(0, 200), filename: name, storage_path: path, mime_type: mime, source_type: 'agent_generated', quality_level: 'professional_editable', mission_id: m.id, agent_id: agentId, version: step.attempt + 1, review_status: 'pending', size_bytes: bytes.length }).select('id').single();
+  const row = { user_id: m.user_id, task_id: taskId, variant, title: title.slice(0, 200), filename: name, storage_path: path, mime_type: mime, source_type: 'agent_generated', quality_level: 'professional_editable', mission_id: m.id, agent_id: agentId, version: step.attempt + 1, review_status: 'pending', size_bytes: bytes.length };
+  // Una fila por (tarea, variante): una corrección crea una versión nueva del archivo en Storage y actualiza la fila;
+  // las versiones anteriores siguen guardadas en su propia ruta y quedan registradas en pulse_tool_calls.
+  const { data: prev } = await db.from('pulse_deliverables').select('id,storage_path,version,review_status').eq('task_id', taskId).eq('variant', variant).maybeSingle();
+  if (prev) {
+    const { error } = await db.from('pulse_deliverables').update(row).eq('id', prev.id);
+    if (error) throw error;
+    if (prev.storage_path !== path) await db.from('pulse_tool_calls').insert({ user_id: m.user_id, mission_id: m.id, step_id: step.id, agent_id: agentId, tool: 'version_file', input: { previous: prev.storage_path, previous_version: prev.version, previous_review: prev.review_status }, output: { current: path, version: row.version }, ok: true, duration_ms: 0 }).then(() => {}, () => {});
+    return { id: prev.id, name, bytes: bytes.length, path };
+  }
+  const { data, error } = await db.from('pulse_deliverables').insert(row).select('id').single();
   if (error) throw error;
   return { id: data.id, name, bytes: bytes.length, path };
 }
@@ -336,7 +346,8 @@ Deno.serve(async (req: Request) => {
     if (action === 'mission.pause') { await db.from('pulse_missions').update({ status: 'paused' }).eq('id', m.id).in('status', ['planning', 'running']); await message(ctx, 'ceo', 'ulises', 'decision', 'El CEO pausó la misión.'); return json({ ok: true }); }
     if (action === 'mission.cancel') { await db.from('pulse_missions').update({ status: 'cancelled' }).eq('id', m.id); await message(ctx, 'ceo', 'ulises', 'decision', 'El CEO canceló la misión.'); return json({ ok: true }); }
     if (action === 'mission.resume') {
-      await db.from('pulse_mission_steps').update({ status: 'pending', attempt: 0, claimed_at: null, error: null }).eq('mission_id', m.id).eq('status', 'failed');
+      // reintento limpio: se reinician intentos y el contador de fallos del motor (el historial queda en mensajes y ejecuciones)
+      await db.from('pulse_mission_steps').update({ status: 'pending', attempt: 0, claimed_at: null, error: null, review: null }).eq('mission_id', m.id).eq('status', 'failed');
       const { count } = await db.from('pulse_mission_steps').select('id', { count: 'exact', head: true }).eq('mission_id', m.id);
       await db.from('pulse_missions').update({ status: count ? 'running' : 'planning', last_error: null, claimed_at: null }).eq('id', m.id);
       await message(ctx, 'ceo', 'ulises', 'decision', 'El CEO reanudó la misión.');
