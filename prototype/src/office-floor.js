@@ -47,6 +47,7 @@ export function mountOfficeFloor(container,{onRoom,onAgent,onNavigate,onError,de
   deck.querySelector('#floor-kind').textContent=room.kind==='department'?'DEPARTAMENTO':'ESPACIO ESPECIAL';
   deck.querySelector('#floor-short').textContent=room.short;
   deck.querySelector('#floor-wing-label').textContent=index<10?'EDIFICIO PRINCIPAL':'ALA EJECUTIVA';
+  const topCenter=document.querySelector('.top-center');if(topCenter)topCenter.textContent=index<10?'EDIFICIO PRINCIPAL / PLANTA 01':'ALA EJECUTIVA / PLANTA 02';
   deck.querySelector('#floor-progress').style.width=`${(index+1)/rooms.length*100}%`;
   deck.querySelector('[data-step="-1"]').disabled=index===0;
   deck.querySelector('[data-step="1"]').disabled=index===rooms.length-1;

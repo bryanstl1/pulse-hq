@@ -209,3 +209,9 @@ html.mobile-experience .mobile-room-agent.scene-selected{filter:drop-shadow(0 0 
  html:not(.mobile-preview) .floor-foot{left:29px;right:auto;bottom:25px;width:240px}
  html:not(.mobile-preview) .floor-controls{left:auto;right:28px;bottom:32px;width:310px}
 }
+html.mobile-preview .scene-spotlight-layer{display:block;position:absolute;inset:0;z-index:19;pointer-events:none}
+html.mobile-preview .scene-spotlight-layer[hidden]{display:none}
+html.mobile-preview .mobile-room-agent.scene-selected,html.mobile-preview .floor-agent.scene-selected{z-index:20}
+html.mobile-preview .scene-spotlight{bottom:min(42dvh,350px);max-height:min(41dvh,345px)}
+.floor-heading p{color:#3e604b;text-shadow:0 1px 7px #fff9ed}
+html:is(.mobile-experience,.mobile-preview) .floor-heading:before{height:240px;background:linear-gradient(#f8f4ebfc 0%,#f8f4ebf3 58%,#f8f4eb00 100%)}
