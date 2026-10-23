@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><title>m</title>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.js","three/addons/":"../vendor/addons/"}}</script>
+<style>body{margin:0;background:#ddd}</style></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { createMascot } from '../src/world/mascots.js';
+import { AGENTS } from '../src/data/roster.js';
+const q=new URLSearchParams(location.search);const pose=q.get('pose')||'idle';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(1600,700);r.shadowMap.enabled=true;document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=new THREE.Color('#efe9df');
+s.add(new THREE.HemisphereLight('#fff','#9a8f80',1.5));const d=new THREE.DirectionalLight('#fff',2.2);d.position.set(2,6,5);d.castShadow=true;s.add(d);
+const fl=new THREE.Mesh(new THREE.PlaneGeometry(30,10),new THREE.MeshStandardMaterial({color:'#d9c3a3'}));fl.rotation.x=-Math.PI/2;fl.receiveShadow=true;s.add(fl);
+const ms=AGENTS.map((a,i)=>{const m=createMascot(a);m.root.position.x=(i-4.5)*1.15;m.root.rotation.y=q.get('rot')?+q.get('rot'):0.25;m.pose=pose;if(pose==='walk'){m.speed=1;m.pose='idle'}s.add(m.root);return m;});
+const cam=new THREE.PerspectiveCamera(22,1600/700,0.1,100);cam.position.set(0,2.6,13);cam.lookAt(0,0.55,0);
+for(let i=0;i<90;i++)ms.forEach(m=>m.update(1/60));
+r.render(s,cam);document.title='ready';
+</script></body></html>

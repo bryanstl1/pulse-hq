@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><title>debug</title>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.js","three/addons/":"../vendor/addons/"}}</script>
+<style>body{margin:0;background:#ddd}canvas{display:block}</style></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { loadFurniture, FURNITURE, cloneModel, modelSize } from '../src/world/assets.js';
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(1600,900);document.body.appendChild(r.domElement);
+const s=new THREE.Scene();s.background=new THREE.Color('#e8e4dc');
+s.add(new THREE.HemisphereLight('#fff','#887',1.6));const d=new THREE.DirectionalLight('#fff',1.5);d.position.set(3,8,6);s.add(d);
+await loadFurniture('../assets/furniture');
+const cols=9;
+FURNITURE.forEach((n,i)=>{const m=cloneModel(n);if(!m)return;const x=(i%cols)*2.2,z=Math.floor(i/cols)*2.4;m.position.set(x,0,z);s.add(m);
+ const a=new THREE.ArrowHelper(new THREE.Vector3(0,0,1),new THREE.Vector3(x,0.02,z),0.9,0xff0000);s.add(a);
+ const c=document.createElement('canvas');c.width=256;c.height=48;const g=c.getContext('2d');g.font='26px sans-serif';g.fillText(n,4,32);
+ const sp=new THREE.Mesh(new THREE.PlaneGeometry(2,0.38),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true}));sp.rotation.x=-Math.PI/2;sp.position.set(x,0.01,z+1.0);s.add(sp);});
+const cam=new THREE.OrthographicCamera(-10,10,5.6,-5.6,0.1,100);cam.position.set(8.8,14,18);cam.lookAt(8.8,0,3.6);
+r.render(s,cam);document.title='ready';
+</script></body></html>
