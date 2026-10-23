@@ -76,8 +76,8 @@ html.mobile-experience .mobile-nav button{height:62px}
 html.mobile-experience .inspector{z-index:35;bottom:0;height:min(67dvh,570px);box-shadow:0 -20px 60px #1e3b364d}
 @media(max-height:700px){html.mobile-experience .mobile-deck-heading{top:70px}html.mobile-experience .mobile-room-footer{bottom:136px}html.mobile-experience .mobile-deck-controls{bottom:83px}}
 html.mobile-experience .mobile-deck:before{content:'';position:absolute;top:0;left:0;right:0;height:205px;z-index:5;pointer-events:none;background:linear-gradient(#f5f1eaf5 0%,#f5f1eacc 45%,#f5f1ea00 100%)}
-html.mobile-experience .mobile-room-agent{width:105px;height:165px}
-html.mobile-experience .mobile-room-agent .sprite-cell{width:88px;height:147px}
+html.mobile-experience .mobile-room-agent{width:86px;height:137px}
+html.mobile-experience .mobile-room-agent .sprite-cell{width:72px;height:120px}
 
 /* Enterprise panels share the office's visual language and display only server records. */
 .inspector-body label{display:block;color:#526f5e;font:800 10px 'Manrope',sans-serif;letter-spacing:.06em;margin:15px 0 7px}
@@ -107,5 +107,10 @@ html.mobile-experience .mobile-room-agent .sprite-cell{width:88px;height:147px}
 .live-download{display:block;margin:4px 0 13px;padding:9px;border-radius:9px;background:#e5f2e5;color:#305b40;font-size:11px}
 .mobile-room-agent[data-state="running"] .sprite-cell{animation:agent-work 1.8s ease-in-out infinite alternate}
 .mobile-room-agent[data-state="review"] b:after{content:' · !';color:#ffd592}
+.mobile-room-agent{transition:left .8s cubic-bezier(.22,1,.36,1),top .8s cubic-bezier(.22,1,.36,1)}
+.mobile-room-agent[data-state="running"]{left:var(--work-x);top:var(--work-y)}
+.mobile-room-agent .agent-activity{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);white-space:nowrap;padding:5px 8px;border-radius:8px;background:#fcfaf1f2;border:1px solid #fff;box-shadow:0 4px 12px #2b49302a;color:#315940;font:800 8px 'Manrope',sans-serif;letter-spacing:.05em}
+.mobile-room-agent[data-state="running"] .agent-activity,.mobile-room-agent[data-state="review"] .agent-activity{display:block}
+.mobile-room-agent[data-state="review"] .agent-activity{color:#946326}
 @keyframes agent-work{to{transform:translateY(-5px)}}
-@media(prefers-reduced-motion:reduce){.mobile-room-agent[data-state="running"] .sprite-cell{animation:none}}
+@media(prefers-reduced-motion:reduce){.mobile-room-agent[data-state="running"] .sprite-cell{animation:none}.mobile-room-agent{transition:none}}
