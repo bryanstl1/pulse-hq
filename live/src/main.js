@@ -181,7 +181,9 @@ function back() { const prev = app.history.pop(); if (prev) { app.sheet = prev; 
 
 function renderSheet(preserve = false) {
   const s = app.sheet; if (!s) return;
-  const ta = sheetEl.querySelector('textarea[name=instruction]'); const draft = preserve && ta ? ta.value : '';
+  // conservar lo escrito (cualquier campo) y el foco al redibujar por el sondeo
+  const drafts = {}; let focused = null;
+  if (preserve) sheetEl.querySelectorAll('input[name],textarea[name]').forEach(el => { if (el.type !== 'checkbox' && el.value) drafts[el.name] = el.value; if (el === document.activeElement) focused = el.name; });
   const body = sheetEl.querySelector('.sheet-body'); const atBottom = body && body.scrollTop + body.clientHeight >= body.scrollHeight - 40; const scroll = preserve && body && !atBottom ? body.scrollTop : null;
   const live = app.ent || { snapshot: {} };
   const ctx = { ...app, ent: live };
@@ -200,7 +202,8 @@ function renderSheet(preserve = false) {
   sheetEl.classList.add('open'); sheetEl.classList.toggle('tall', out.size === 'tall'); sheetEl.classList.toggle('agent', out.size === 'agent'); sheetEl.classList.toggle('mid', out.size === 'mid');
   document.body.classList.toggle('sheet-open', true);
   sheetEl.setAttribute('aria-hidden', 'false');
-  if (draft) { const t = sheetEl.querySelector('textarea[name=instruction]'); if (t) t.value = draft; }
+  for (const [name, value] of Object.entries(drafts)) { const el = sheetEl.querySelector(`[name="${name}"]`); if (el && el.type !== 'checkbox') el.value = value; }
+  if (focused) { const el = sheetEl.querySelector(`[name="${focused}"]`); el?.focus({ preventScroll: true }); }
   applyArmed();
   if (scroll != null) { const b = sheetEl.querySelector('.sheet-body'); if (b) b.scrollTop = scroll; }
   else if (s.type === 'agent' && s.tab === 'chat' || atBottom) { const b = sheetEl.querySelector('.sheet-body'); if (b) b.scrollTop = b.scrollHeight; }
