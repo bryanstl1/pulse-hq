@@ -112,5 +112,20 @@ html.mobile-experience .mobile-room-agent .sprite-cell{width:72px;height:120px}
 .mobile-room-agent .agent-activity{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);white-space:nowrap;padding:5px 8px;border-radius:8px;background:#fcfaf1f2;border:1px solid #fff;box-shadow:0 4px 12px #2b49302a;color:#315940;font:800 8px 'Manrope',sans-serif;letter-spacing:.05em}
 .mobile-room-agent[data-state="running"] .agent-activity,.mobile-room-agent[data-state="review"] .agent-activity{display:block}
 .mobile-room-agent[data-state="review"] .agent-activity{color:#946326}
+.agent-conversation{height:min(34dvh,270px);min-height:145px;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:17px;padding:14px 3px;margin:15px 0;border-top:1px solid #e3e9df;border-bottom:1px solid #e3e9df}
+.agent-exchange{display:flex;flex-direction:column;gap:9px}
+.agent-message{max-width:92%;padding:12px 14px;border-radius:15px;background:#ecf1e9;align-self:flex-end;color:#355440;overflow-wrap:anywhere}
+.agent-message.agent-response{align-self:flex-start;background:#f6f4ed;border:1px solid #e7e4d8;color:#3d5147}
+.agent-message.message-error{background:#fff1e9;border-color:#e5c7b7}
+.agent-message small{font:800 9px 'Manrope',sans-serif;color:#6d8977;letter-spacing:.03em}
+.agent-message p{margin:7px 0 0;white-space:pre-wrap;max-height:120px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;font-size:12px;line-height:1.5}
+.agent-message .live-link{font-size:10px;padding:7px 9px;min-height:34px;margin:9px 0 0}
+.agent-message .live-row{font-size:10px;padding:7px;margin:8px 0 0;background:#fffdf8}
+.agent-message .live-row b{font-size:10px}
+.chat-empty{font-size:12px!important;text-align:center;color:#84978a!important;padding:20px 12px}
+.agent-composer{background:#f8f9f3}
+.agent-composer textarea{min-height:78px}
+html.mobile-experience .inspector[data-view="agent"],html.mobile-preview .inspector[data-view="agent"]{height:min(82dvh,720px)}
+.live-step p{margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}.live-step strong{color:#385842}.live-step-error{color:#a16043!important}
 @keyframes agent-work{to{transform:translateY(-5px)}}
 @media(prefers-reduced-motion:reduce){.mobile-room-agent[data-state="running"] .sprite-cell{animation:none}.mobile-room-agent{transition:none}}
