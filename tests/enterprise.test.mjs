@@ -46,3 +46,25 @@ test('el resultado del servidor se escapa antes de aparecer en una ficha',async(
  const app=createEnterprise(client);await app.init();const html=renderPanel('task',null,app,{selectedTask:'t1'});
  assert.doesNotMatch(html,/<script>|<img/);assert.match(html,/&lt;img/);
 });
+
+test('la conversación muestra encargos, respuestas y archivos registrados sin inventar mensajes',async()=>{
+ const records={
+  pulse_tasks:[{id:'t1',department:'Dirección estratégica',instruction:'Preparar <plan> para el CEO',status:'completed',result:'Resultado aprobado <b>interno</b>',created_at:new Date().toISOString()}],
+  pulse_deliverables:[{id:'f1',task_id:'t1',title:'Informe del CEO',filename:'informe.pdf',created_at:new Date().toISOString()}]
+ };
+ const {client}=fakeClient({id:'ceo'},records);const app=createEnterprise(client);await app.init();
+ const html=renderPanel('agent',{id:'direction',name:'Dirección estratégica',agent:'Valeria',title:'Operaciones',sub:'Oficina',description:'Coordina'},app);
+ assert.match(html,/Preparar &lt;plan&gt;/);assert.match(html,/Resultado aprobado &lt;b&gt;interno&lt;\/b&gt;/);
+ assert.match(html,/Informe del CEO/);assert.match(html,/data-live-action="run"/);
+ assert.doesNotMatch(html,/<plan>|<b>interno<\/b>/);
+});
+
+test('la colaboración visible procede de etapas guardadas por la misión',async()=>{
+ const {client}=fakeClient({id:'ceo'},{
+  pulse_missions:[{id:'m1',title:'Lanzamiento',objective:'Preparar una propuesta',status:'active'}],
+  pulse_mission_steps:[{id:'s1',mission_id:'m1',seq:1,department:'Inteligencia de mercado',directive:'Investiga datos',status:'completed',result:'Hallazgo registrado',task_id:'t1'}]
+ });const app=createEnterprise(client);await app.init();
+ const html=renderPanel('missions',null,app,{selectedMission:'m1'});
+ assert.match(html,/Traspasos entre departamentos/);assert.match(html,/Investiga datos/);assert.match(html,/Hallazgo registrado/);
+ assert.match(html,/data-task-id="t1"/);
+});
