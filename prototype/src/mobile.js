@@ -1,14 +1,16 @@
 import {mobileRooms as rooms} from './mobile-data.js';
 
 const GAP=0;
-const agentSpots={direction:[52,69],marketing:[51,74],content:[49,73],sales:[51,73],relations:[51,76],events:[54,73],community:[53,74],intelligence:[52,73],finance:[50,75],technology:[51,72]};
+// Stage coordinates keep the character on the visible floor of each illustration.
+// The separate work coordinates are used only while a recent server task is running.
+const agentSpots={direction:[52,69,62,58],marketing:[51,74,64,62],content:[49,73,60,61],sales:[51,73,63,61],relations:[51,76,62,63],events:[54,73,64,61],community:[53,74,62,62],intelligence:[52,73,63,61],finance:[50,75,62,62],technology:[51,72,62,60]};
 const escapeText=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /** Mobile room navigator. Each room has dedicated artwork; no server activity is implied. */
 export function mountMobileDepartments(container,{onRoom,onAgent}){
  const deck=document.createElement('div');deck.className='mobile-deck';
  deck.innerHTML=`<div class="mobile-deck-heading"><div class="mobile-deck-eyebrow">PULSE HQ <span> / </span> RECORRE TU COMPAÑÍA</div><div class="mobile-deck-count" id="mobile-room-count"></div><h1 id="mobile-room-heading"></h1><p id="mobile-room-subtitle"></p></div>
- <div class="mobile-stage-viewport" aria-label="Departamentos de la oficina"><div class="mobile-stage-track">${rooms.map((r,i)=>`<article class="mobile-room-stage" data-slide="${i}" style="--accent:${r.accent}" aria-label="${escapeText(r.name)}"><div class="mobile-room-art"><img src="./assets/mobile-rooms/${r.art}.webp" alt="" draggable="false" loading="lazy"></div>${r.kind==='department'&&r.agent?`<button class="mobile-room-agent" data-agent="${r.id}" aria-label="Conocer a ${escapeText(r.agent)}" style="--sprite-pos:${r.sprite*(r.atlas==='original'?25:100/3)}%;--sprite-size:${r.atlas==='original'?500:400}%;--sprite-atlas:url('/assets/characters/${r.atlas==='original'?'pulse-agents-pixel-atlas-v1':`${r.atlas}-atlas-v1`}.webp');--agent-x:${agentSpots[r.id][0]}%;--agent-y:${agentSpots[r.id][1]}%"><span class="sprite-cell" aria-hidden="true"></span><b>${escapeText(r.agent)}</b></button>`:''}<div class="mobile-room-footer"><div><small>${escapeText(r.kind==='department'?'DEPARTAMENTO':'ESPACIO ESPECIAL')}</small><strong>${escapeText(r.short)}</strong></div><button data-room="${r.id}" aria-label="Abrir ${escapeText(r.name)}">↗</button></div></article>`).join('')}</div></div>
+ <div class="mobile-stage-viewport" aria-label="Departamentos de la oficina"><div class="mobile-stage-track">${rooms.map((r,i)=>`<article class="mobile-room-stage" data-slide="${i}" style="--accent:${r.accent}" aria-label="${escapeText(r.name)}"><div class="mobile-room-art"><img src="./assets/mobile-rooms/${r.art}.webp" alt="" draggable="false" loading="lazy"></div>${r.kind==='department'&&r.agent?`<button class="mobile-room-agent" data-agent="${r.id}" data-state="unconnected" aria-label="Conocer a ${escapeText(r.agent)}; actividad no consultada" style="--sprite-pos:${r.sprite*(r.atlas==='original'?25:100/3)}%;--sprite-size:${r.atlas==='original'?500:400}%;--sprite-atlas:url('/assets/characters/${r.atlas==='original'?'pulse-agents-pixel-atlas-v1':`${r.atlas}-atlas-v1`}.webp');--agent-x:${agentSpots[r.id][0]}%;--agent-y:${agentSpots[r.id][1]}%;--work-x:${agentSpots[r.id][2]}%;--work-y:${agentSpots[r.id][3]}%"><span class="agent-activity" aria-hidden="true"></span><span class="sprite-cell" aria-hidden="true"></span><b>${escapeText(r.agent)}</b></button>`:''}<div class="mobile-room-footer"><div><small>${escapeText(r.kind==='department'?'DEPARTAMENTO':'ESPACIO ESPECIAL')}</small><strong>${escapeText(r.short)}</strong></div><button data-room="${r.id}" aria-label="Abrir ${escapeText(r.name)}">↗</button></div></article>`).join('')}</div></div>
  <div class="mobile-deck-controls"><button data-move="-1" aria-label="Espacio anterior">←</button><div class="mobile-deck-dots" aria-label="Seleccionar espacio">${rooms.map((r,i)=>`<button data-index="${i}" aria-label="Ir a ${escapeText(r.name)}"></button>`).join('')}</div><button data-move="1" aria-label="Espacio siguiente">→</button></div><div class="mobile-deck-hint">DESLIZA A LOS LADOS PARA CAMBIAR DE ESPACIO</div>`;
  container.append(deck);
  const windowEl=deck.querySelector('.mobile-stage-viewport'),track=deck.querySelector('.mobile-stage-track');
@@ -44,6 +46,8 @@ export function mountMobileDepartments(container,{onRoom,onAgent}){
    const room=rooms.find(r=>r.id===button.dataset.agent),activity=room&&getActivity?.(room.name);
    button.dataset.state=activity?.kind||'unconnected';
    button.title=activity?.label||'Actividad no consultada';
+   button.setAttribute('aria-label',`Conocer a ${room.agent}; ${button.title}`);
+   button.querySelector('.agent-activity').textContent=activity?.kind==='running'?'EN EJECUCIÓN':activity?.kind==='review'?'REVISIÓN PENDIENTE':'';
   });
  },destroy(){destroyed=true;clearTimeout(swipeTimer);observer.disconnect();windowEl.removeEventListener('pointerdown',pointerDown);windowEl.removeEventListener('pointermove',pointerMove);windowEl.removeEventListener('pointerup',pointerEnd);windowEl.removeEventListener('pointercancel',pointerEnd);deck.removeEventListener('click',click);deck.removeEventListener('keydown',key);deck.remove()}};
 }
