@@ -68,3 +68,17 @@ test('la colaboración visible procede de etapas guardadas por la misión',async
  assert.match(html,/Traspasos entre departamentos/);assert.match(html,/Investiga datos/);assert.match(html,/Hallazgo registrado/);
  assert.match(html,/data-task-id="t1"/);
 });
+
+test('el espacio de trabajo del avatar reúne tareas, revisiones y misión registradas',async()=>{
+ const {client}=fakeClient({id:'ceo'}, {
+  pulse_tasks:[{id:'t1',department:'Dirección estratégica',instruction:'Preparar propuesta ejecutiva',status:'running',created_at:new Date().toISOString(),updated_at:new Date().toISOString()}],
+  pulse_approvals:[{id:'a1',department:'Dirección estratégica',title:'Revisar propuesta',description:'Validar antes de entregar',status:'pending'}],
+  pulse_missions:[{id:'m1',title:'Lanzamiento',status:'active'}],
+  pulse_mission_steps:[{id:'s1',mission_id:'m1',seq:2,department:'Dirección estratégica',directive:'Coordinar áreas',status:'active',task_id:'t1'}]
+ });const app=createEnterprise(client);await app.init();
+ const room={id:'direction',name:'Dirección estratégica',agent:'Valeria',title:'Directora',sub:'Oficina',description:'Coordina'};
+ const html=renderPanel('agent',room,app,{agentTab:'work'});
+ assert.match(html,/Preparar propuesta ejecutiva/);assert.match(html,/Revisar propuesta/);
+ assert.match(html,/data-agent-mission="m1"/);assert.match(html,/Lanzamiento/);
+ assert.doesNotMatch(html,/id="agent-command"/);
+});
