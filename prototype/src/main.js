@@ -15,7 +15,7 @@ const findRoom=id=>catalog().find(r=>r.id===id)||byId(id);
 const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const app=document.getElementById('app');
 const enterprise=createEnterprise();
-let world=null,selected=null,view='ceo',busy=false,error='',taskId='',missionId='';
+let world=null,selected=null,view='ceo',busy=false,error='',taskId='',missionId='',agentTab='chat';
 const drafts=new Map();
 app.innerHTML=`<header class="mast"><div class="brand"><div class="brand-symbol"><i></i><i></i><i></i><i></i></div><span><b>PULSE HQ</b><small>LA COMPAÑÍA DIGITAL</small></span></div><div class="top-center">EDIFICIO PRINCIPAL / PLANTA 01</div><div class="top-right"><span class="demo-pill" id="connection-pill">✦ Muestra visual</span><button id="directory" class="icon-button" aria-label="Abrir directorio">☷</button></div></header>
 <div class="workspace"><nav class="rail" aria-label="Secciones"><div class="rail-group"><button data-tab="spaces" class="rail-button selected" aria-label="Oficina">⌗</button><button data-tab="agents" class="rail-button" aria-label="Agentes">♧</button><button data-tab="missions" class="rail-button" aria-label="Misiones">◇</button><button data-tab="ceo" class="rail-button" aria-label="CEO">♛</button></div><small>PULSE<br>HQ</small></nav>
@@ -33,12 +33,12 @@ function renderInspector(){
  const room=findRoom(selected);
  if(view==='directory'){
   panel.innerHTML=`<div class="inspector-kicker">DIRECTORIO</div><h2>Explora tu compañía.</h2><p class="inspector-lead">${catalog().length} espacios ilustrados</p><div class="overview-list">${catalog().map(r=>`<button data-room-name="${safe(r.name)}"><i style="background:${r.accent}"></i><span><b>${safe(r.name)}</b><small>${safe(r.sub)}</small></span><em>↗</em></button>`).join('')}</div>`;
- }else panel.innerHTML=renderPanel(view,room,enterprise,{draft:drafts.get(selected)||'',busy,error,selectedTask:taskId,selectedMission:missionId});
+ }else panel.innerHTML=renderPanel(view,room,enterprise,{draft:drafts.get(selected)||'',busy,error,selectedTask:taskId,selectedMission:missionId,agentTab});
  inspector.scrollTop=previousScroll;
  if(focused==='agent-command'&&!busy){const input=document.getElementById('agent-command');input?.focus({preventScroll:true});if(input&&selection!==null)input.setSelectionRange(selection,selection)}
  document.getElementById('connection-pill').textContent=enterprise.user?'● Conectado':'✦ Muestra visual';
 }
-function show(kind,id=null){if(view!==kind||selected!==id)inspector.scrollTop=0;view=kind;selected=id;error='';inspector.hidden=false;
+function show(kind,id=null){if(view!==kind||selected!==id){inspector.scrollTop=0;if(kind==='agent')agentTab='chat'}view=kind;selected=id;error='';inspector.hidden=false;
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('selected',b.dataset.tab===kind));
  renderInspector();if(id)world?.focus?.(id);
 }
@@ -78,6 +78,8 @@ app.addEventListener('click',async e=>{
  if(b.dataset.roomName){const room=catalog().find(r=>r.name===b.dataset.roomName);if(room)inspectRoom(room.id,true);return}
  if(b.dataset.conversation){show('agent',b.dataset.conversation);return}
  if(b.dataset.profile){show('room',b.dataset.profile);return}
+ if(b.dataset.agentTab){agentTab=b.dataset.agentTab;inspector.scrollTop=0;renderInspector();return}
+ if(b.dataset.agentMission){missionId=b.dataset.agentMission;show('missions');return}
  if(b.dataset.room){inspectRoom(b.dataset.room);return}
  if(b.dataset.liveView){show(b.dataset.liveView);return}
  if(b.dataset.taskId){taskId=b.dataset.taskId;show('task');return}
