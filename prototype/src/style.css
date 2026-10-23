@@ -165,3 +165,47 @@ html.mobile-experience .mobile-room-agent.scene-selected{filter:drop-shadow(0 0 
 @keyframes scene-appear{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
 @media(max-height:700px){.scene-spotlight{bottom:39dvh;max-height:43dvh}}
 @media(prefers-reduced-motion:reduce){.scene-spotlight{animation:none}}
+
+/* Connected office floor: the camera moves through two coherent wings. */
+.office-floor{position:absolute;inset:0;z-index:5;overflow:hidden;background:#e8e1d5;display:block;color:#293f34}
+.floor-world{position:absolute;inset:0;overflow:hidden;touch-action:none;background:radial-gradient(circle at 48% 45%,#f7f0e4,#e7dfd2 85%)}
+.floor-wing{position:absolute;left:0;top:0;width:1774px;height:887px;transform-origin:0 0;opacity:0;pointer-events:none;will-change:transform}
+.floor-wing.visible{opacity:1;pointer-events:auto}
+.floor-wing>img{display:block;width:1774px;height:887px;pointer-events:none;user-select:none}
+.floor-room-hit{position:absolute;width:290px;height:250px;border:0;background:transparent;cursor:pointer;border-radius:18px}
+.floor-room-hit:focus-visible{outline:3px solid #347753;outline-offset:-5px;background:#3b7d4930}
+.floor-agent{position:absolute;width:67px;height:109px;transform:translate(-50%,-65%);z-index:3;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0;filter:drop-shadow(0 4px 3px #172e2869);transition:transform .25s,filter .25s}
+.floor-agent .sprite-cell{width:56px;height:86px}
+.floor-agent b{position:relative;z-index:1;margin-top:-7px;border-radius:9px;padding:3px 6px;background:#27493a;color:white;font:800 8px 'Manrope',sans-serif;white-space:nowrap;box-shadow:0 2px 5px #152f3544}
+.floor-agent.scene-selected{transform:translate(-50%,-68%) scale(1.17);filter:drop-shadow(0 0 7px #fff8c2)}
+.floor-agent .agent-activity{display:none;position:absolute;bottom:96%;left:50%;transform:translateX(-50%);white-space:nowrap;background:#fffbf2;border:1px solid #e7d6ad;color:#7b5b32;padding:4px 6px;border-radius:8px;font:800 7px 'Manrope',sans-serif;box-shadow:0 3px 9px #4d4b3a2c}
+.floor-agent[data-state="running"] .agent-activity,.floor-agent[data-state="review"] .agent-activity,.floor-agent.needs-ceo .agent-activity{display:block}
+.floor-agent[data-state="running"] .sprite-cell{animation:agent-work 1.8s ease-in-out infinite alternate}
+.floor-heading{position:absolute;left:17px;right:17px;top:76px;z-index:5;pointer-events:none;text-shadow:0 1px 8px #f7f2e8}
+.floor-heading>span,.floor-heading>b{font:800 9px 'Manrope',sans-serif;letter-spacing:.15em;color:#668373}
+.floor-heading i{font-style:normal;color:#a3b2a2;padding:0 6px}
+.floor-heading>b{float:right;color:#3d604b}
+.floor-heading h1{margin:9px 0 2px;font:800 clamp(25px,7.3vw,35px)/1.04 'Manrope',sans-serif;letter-spacing:-.06em;max-width:330px}
+.floor-heading p{margin:0;color:#5b7362;font-size:11px}
+.floor-heading:before{content:'';position:fixed;top:0;left:0;right:0;height:210px;z-index:-1;background:linear-gradient(#f8f4ebfb,#f8f4ebdf 55%,#f8f4eb00);pointer-events:none}
+.floor-foot{position:absolute;left:16px;right:16px;bottom:147px;z-index:5;padding:10px 13px 12px;border:1px solid #fff9eecc;border-radius:15px;background:#f8f5eada;box-shadow:0 9px 28px #28403426;backdrop-filter:blur(13px);-webkit-backdrop-filter:blur(13px)}
+.floor-foot>span,.floor-foot small{font:800 8px 'Manrope',sans-serif;letter-spacing:.14em;color:#6f8d74}
+.floor-foot-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:3px}
+.floor-foot small{display:block;color:#91a090;font-size:7px}
+.floor-foot strong{display:block;font:800 18px 'Manrope',sans-serif;letter-spacing:-.04em;line-height:1.25}
+.floor-foot button{flex:none;width:38px;height:38px;border:0;border-radius:11px;background:#305a42;color:white;font-size:21px}
+.floor-controls{position:absolute;left:16px;right:16px;bottom:91px;z-index:6;display:flex;align-items:center;gap:8px}
+.floor-controls button{width:39px;height:39px;flex:none;border:1px solid #d9e1d4;background:#fbfaf4ed;border-radius:11px;color:#376a4c;font:22px 'Manrope',sans-serif;box-shadow:0 3px 10px #31443216}
+.floor-controls button:disabled{opacity:.33}
+.floor-progress{height:4px;flex:1;border-radius:4px;background:#c1d1c3;overflow:hidden;margin:0 3px}
+.floor-progress span{display:block;width:5%;height:100%;background:#326f4c;border-radius:4px;transition:width .45s}
+@media(max-height:700px){.floor-heading{top:66px}.floor-foot{bottom:128px}.floor-controls{bottom:78px}}
+@media(prefers-reduced-motion:reduce){.floor-agent[data-state="running"] .sprite-cell{animation:none}.floor-progress span{transition:none}}
+@media(min-width:601px){
+ html:not(.mobile-preview) .viewer-heading,html:not(.mobile-preview) .scene-note,html:not(.mobile-preview) .view-tools,html:not(.mobile-preview) .rooms-strip,html:not(.mobile-preview) .instructions{display:none}
+ html:not(.mobile-preview) .floor-heading{left:30px;right:30px;top:23px}
+ html:not(.mobile-preview) .floor-heading h1{font-size:28px;max-width:560px}
+ html:not(.mobile-preview) .floor-heading:before{height:170px}
+ html:not(.mobile-preview) .floor-foot{left:29px;right:auto;bottom:25px;width:240px}
+ html:not(.mobile-preview) .floor-controls{left:auto;right:28px;bottom:32px;width:310px}
+}

@@ -1,6 +1,7 @@
 import {rooms,byId} from './data.js';
 import {mobileRooms} from './mobile-data.js';
 import {mountIllustrated} from './fallback.js';
+import {mountOfficeFloor} from './office-floor.js';
 import {mountMobileDepartments} from './mobile.js';
 import {createEnterprise} from './enterprise.js';
 import {renderPanel} from './enterprise-ui.js';
@@ -11,7 +12,7 @@ const mobilePreview=new URLSearchParams(location.search).has('mobile-preview');
 if(mobilePreview)document.documentElement.classList.add('mobile-preview');
 const isMobile=()=>mobilePreview||matchMedia('(max-width:600px)').matches;
 document.documentElement.classList.toggle('mobile-experience',isMobile());
-const catalog=()=>isMobile()?mobileRooms:rooms;
+const catalog=()=>mobileRooms;
 const findRoom=id=>catalog().find(r=>r.id===id)||byId(id);
 const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const app=document.getElementById('app');
@@ -77,10 +78,9 @@ async function run(action){
 }
 async function initWorld(){
  loading.hidden=false;fallback.hidden=true;closeSpotlight();world?.destroy();world=null;
- if(isMobile()){world=mountMobileDepartments(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true),onNavigate:closeSpotlight});loading.hidden=true;renderInspector();return}
- const illustrated=()=>{world?.destroy();world=mountIllustrated(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true)});loading.hidden=true};
- try{const {mountWorld}=await import('./world.js');world=await mountWorld(viewport,{onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true),onProgress:(done,total)=>{document.getElementById('loadBar').style.width=`${Math.round(done/total*100)}%`;document.getElementById('loadText').textContent=`${done} / ${total} recursos`},onReady:()=>loading.hidden=true,onError:()=>queueMicrotask(illustrated)});if(!world?.ok)illustrated()}
- catch(e){console.warn('Vista gráfica no disponible',e);illustrated()}
+ const controls={onRoom:id=>inspectRoom(id),onAgent:id=>inspectRoom(id,true),onNavigate:closeSpotlight};
+ world=mountOfficeFloor(viewport,{...controls,desktop:!isMobile(),onError:()=>{world?.destroy();world=isMobile()?mountMobileDepartments(viewport,controls):mountIllustrated(viewport,controls);renderInspector()}});
+ loading.hidden=true;renderInspector();return;
 }
 app.addEventListener('input',e=>{if(e.target.id==='agent-command')drafts.set(selected,e.target.value)});
 app.addEventListener('click',async e=>{
