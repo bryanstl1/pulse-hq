@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#efe6d8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>PULSE HQ · cargando</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage"></div>
+  <div id="overlay" aria-label="Agentes y objetos de la sala"></div>
+
+  <div id="sim-banner" hidden>SIMULACIÓN · datos inventados solo para pruebas</div>
+
+  <header id="hud-top">
+    <div id="room-card">
+      <span id="room-n">01/16</span>
+      <div><h1 id="room-name">PULSE HQ</h1><p id="room-sub"></p></div>
+    </div>
+    <button id="session" class="session off" type="button"><i></i><span>Sin sesión</span></button>
+  </header>
+  <button id="legend" type="button"></button>
+
+  <button id="prev" class="edge-nav left" type="button" aria-label="Sala anterior">‹</button>
+  <button id="next" class="edge-nav right" type="button" aria-label="Sala siguiente">›</button>
+
+  <nav id="dock" aria-label="Navegación">
+    <div id="dots"></div>
+    <div class="dock-row">
+      <button data-dock="office" type="button"><b>⌂</b><span>Oficina</span></button>
+      <button data-dock="missions" type="button"><b>◆</b><span>Misiones</span></button>
+      <button data-dock="approvals" type="button"><b>!</b><span>Revisiones</span><i class="badge" hidden>0</i></button>
+      <button data-dock="files" type="button"><b>⤓</b><span>Archivos</span></button>
+    </div>
+  </nav>
+
+  <section id="sheet" class="sheet" role="dialog" aria-modal="false" aria-hidden="true">
+    <div class="handle" aria-hidden="true"><i></i></div>
+    <div class="sheet-inner"></div>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="loader"><div class="brand"><b>PULSE</b> HQ</div><p>Preparando la oficina…</p><div class="bar"><i></i></div></div>
+  <noscript>PULSE HQ necesita JavaScript.</noscript>
+</div>
+<script type="module" src="./dist/app.js"></script>
+</body>
+</html>
