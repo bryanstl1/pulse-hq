@@ -19,7 +19,19 @@ const conversation=(room,data,draft,busy,files)=>{
   `<section class="live-card agent-composer"><h3>Hablar con ${esc(room.agent)}</h3><p>Tu mensaje crea una tarea real para ${esc(room.name)}. La respuesta aparecerá cuando el servidor la registre.</p><label for="agent-command">Tu instrucción</label><textarea id="agent-command" maxlength="2000" placeholder="Describe el objetivo, entregables y criterios de revisión…">${esc(draft)}</textarea><button class="primary" data-live-action="run" ${busy?'disabled':''}>${busy?'Enviando al servidor…':'Enviar instrucción ↗'}</button><p class="live-note">Usa pulse-run, Gemini y el contrato profesional existente. Puede consumir la cuota diaria.</p></section>`;
 };
 
-export function renderPanel(view,room,enterprise,{draft='',error='',busy=false,selectedTask='',selectedMission='' }={}){
+const agentWork=(data,s)=>{
+ const active=data.tasks.filter(t=>['queued','running','processing','in_progress'].includes(t.status));
+ const reviews=data.approvals;
+ const steps=data.steps.slice().sort((a,b)=>a.seq-b.seq);
+ const recent=data.tasks.slice(0,12);
+ return `<div class="agent-work-summary"><span><b>${active.length}</b> en curso</span><span><b>${reviews.length}</b> por revisar</span><span><b>${steps.length}</b> etapas registradas</span></div>`+
+  `<h3 class="live-section">Trabajo en curso</h3>${active.length?active.map(taskRow).join(''):card('<p>No hay tareas en curso registradas para este departamento.</p>')}`+
+  (reviews.length?`<h3 class="live-section">Necesita tu revisión</h3>${reviews.map(a=>card(`<b>${esc(a.title)}</b><p>${esc(a.description)}</p><button class="live-link" data-live-view="approvals">Abrir aprobaciones ↗</button>`)).join('')}`:'')+
+  (steps.length?`<h3 class="live-section">Colaboración en misiones</h3>${steps.slice(0,8).map(st=>{const mission=s.missions.find(m=>m.id===st.mission_id);return card(`<b>${esc(mission?.title||'Misión registrada')} · etapa ${esc(st.seq)}</b><p>${esc(label(st.status))} · ${esc(st.directive||'Sin instrucción registrada')}</p>${st.task_id?`<button class="live-link" data-task-id="${esc(st.task_id)}">Ver trabajo ↗</button>`:''}<button class="live-link" data-agent-mission="${esc(st.mission_id)}">Ver colaboración completa ↗</button>`)}).join('')}`:'')+
+  `<h3 class="live-section">Historial reciente</h3>${recent.length?recent.map(taskRow).join(''):card('<p>Todavía no hay encargos registrados.</p>')}`;
+};
+
+export function renderPanel(view,room,enterprise,{draft='',error='',busy=false,selectedTask='',selectedMission='',agentTab='chat' }={}){
  const user=enterprise.user,s=enterprise.snapshot;
  const banner=error?`<div class="live-error" role="alert">${esc(error)}</div>`:enterprise.lastError?`<div class="live-error" role="alert">No se pudieron actualizar los registros: ${esc(enterprise.lastError)}. La actividad mostrada corresponde a la última consulta correcta. <button data-live-action="refresh">Reintentar</button></div>`:'';
  const loading=enterprise.loading?'<p class="live-note">Actualizando registros…</p>':'';
@@ -32,10 +44,15 @@ export function renderPanel(view,room,enterprise,{draft='',error='',busy=false,s
   const heading=view==='agent'&&dept?`${room.agent} · ${role?.professional_title||room.title}`:name;
   body=title(view==='agent'?'AGENTE · PULSE HQ':'ESPACIO · PULSE HQ',heading,room.sub)+`<p>${esc(role?.purpose||room.description)}</p>`;
   if(dept){
-   body+=card(`<div class="live-state ${esc(user?data.activity.kind:'unconnected')}"><i></i><span>${esc(user?data.activity.label:'Actividad no consultada')}</span></div><p>${user?`${data.tasks.length} tareas registradas · ${data.approvals.length} revisiones pendientes`:'Inicia sesión para consultar el trabajo real de este departamento.'}</p>`);
+   body+=card(`<div class="live-state ${esc(user?data.activity.kind:'unconnected')}"><i></i><span>${esc(user?data.activity.label:'Actividad no consultada')}</span></div><p>${user?`${data.tasks.length} ${data.tasks.length===1?'tarea registrada':'tareas registradas'} · ${data.approvals.length} ${data.approvals.length===1?'revisión pendiente':'revisiones pendientes'}`:'Inicia sesión para consultar el trabajo real de este departamento.'}</p>`);
    if(view==='agent'){
-    if(user)body+=conversation(room,data,draft,busy,s.deliverables);
-    body+=`<button class="live-link" data-profile="${esc(room.id)}">Ver perfil y colaboración ↗</button>`;
+    if(user){
+     body+=`<nav class="agent-tabs" aria-label="Secciones de ${esc(room.agent)}">${[['chat','Conversación'],['work','Trabajo'],['profile','Perfil']].map(([id,name])=>`<button data-agent-tab="${id}" aria-current="${agentTab===id?'page':'false'}">${name}</button>`).join('')}</nav>`;
+     if(agentTab==='work')body+=agentWork(data,s);
+     else if(agentTab==='profile')body+=card(`<h3>Contrato profesional</h3><p><b>${esc(role?.professional_title||room.title)}</b></p><p>${esc(role?.purpose||room.description)}</p><h4>Entregables esperados</h4><p>${esc(role?.output_contract||'No hay contrato de entregables registrado.')}</p><h4>Criterios de revisión</h4><p>${esc(role?.acceptance_criteria||'Sin criterios registrados.')}</p><small>Traspaso: ${esc(role?.handoff_to||'Sin definir')}</small>`);
+     else body+=conversation(room,data,draft,busy,s.deliverables);
+    }
+    else body+=`<button class="live-link" data-profile="${esc(room.id)}">Ver información del departamento ↗</button>`;
    }else if(user){
     body+=`<button class="primary" data-conversation="${esc(room.id)}">Hablar con ${esc(room.agent)} ↗</button>`;
     if(role)body+=card(`<h3>Contrato profesional</h3><p>${esc(role.professional_title)}</p><small>Traspaso: ${esc(role.handoff_to||'Sin definir')}</small>`);
