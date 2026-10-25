@@ -77,16 +77,18 @@ export const TOOLS: Record<string, Tool> = {
             const sr = await fetch(`https://${lg}.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=5&srsearch=${encodeURIComponent(name)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
             const titles: string[] = sr.ok ? ((await sr.json())?.query?.search || []).map((s: any) => String(s.title)) : [];
             nearest = nearest || titles[0] || null;
-            const title = titles.find(t => matchesEntity(name, t));
-            if (!title) continue;
-            // texto del artículo (no solo el resumen): las cifras que cite el agente deben poder verificarse aquí
-            const r = await fetch(`https://${lg}.wikipedia.org/w/api.php?action=query&prop=extracts|info&inprop=url&explaintext=1&redirects=1&format=json&titles=${encodeURIComponent(title)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000) });
-            if (!r.ok) continue;
-            const page: any = Object.values((await r.json())?.query?.pages || {})[0];
-            if (!page?.extract || !page?.fullurl) continue;
-            const text = String(page.extract).replace(/\n{2,}/g, '\n').replace(/\n=+ (Referencias|Enlaces externos|Véase también|References|External links|See also) =+[\s\S]*$/, '');
-            hit = { entity: name, found: true, lang: lg, title: page.title, extract: str(text, 3000), url: page.fullurl };
-            break;
+            // texto del artículo (no solo el resumen): las cifras que cite el agente deben poder verificarse aquí;
+            // las páginas de desambiguación no son evidencia, se prueba el siguiente título que corresponda
+            for (const title of titles.filter(t => matchesEntity(name, t)).slice(0, 3)) {
+              const r = await fetch(`https://${lg}.wikipedia.org/w/api.php?action=query&prop=extracts|info|pageprops&ppprop=disambiguation&inprop=url&explaintext=1&redirects=1&format=json&titles=${encodeURIComponent(title)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000) });
+              if (!r.ok) continue;
+              const page: any = Object.values((await r.json())?.query?.pages || {})[0];
+              if (!page?.extract || !page?.fullurl || page?.pageprops?.disambiguation !== undefined) continue;
+              const text = String(page.extract).replace(/\n{2,}/g, '\n').replace(/\n=+ (Referencias|Enlaces externos|Véase también|References|External links|See also) =+[\s\S]*$/, '');
+              hit = { entity: name, found: true, lang: lg, title: page.title, extract: str(text, 3000), url: page.fullurl };
+              break;
+            }
+            if (hit) break;
           }
           items.push(hit || { entity: name, found: false, note: `Sin artículo propio en Wikipedia${nearest ? `; el resultado más cercano («${nearest}») no corresponde a la entidad` : ''}` });
         } catch { items.push({ entity: name, found: false }); }
