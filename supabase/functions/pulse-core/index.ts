@@ -116,15 +116,27 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
   const allowedUrls = new Map<string, string>();
   for (const d of deps) for (const s of (Array.isArray(d.sources) ? d.sources : [])) if (s?.url) allowedUrls.set(norm(s.url), s.title || s.url);
   const transcript: string[] = []; const toolsUsed: string[] = [];
-  const research = agent.tools.includes('wikipedia_summary') ? ' Método de investigación: haz como máximo una búsqueda (wikipedia_search) por entidad y después llama a wikipedia_summary con el título exacto devuelto (o fetch_url de su sitio oficial) para CADA entidad; necesitas al menos 3 consultas de evidencia detallada antes de finalizar. Si una entidad no tiene artículo, usa el más específico disponible y decláralo. Reparte tus pasos para cubrir todas las entidades.' : '';
-  const system = `Eres ${agent.name}, ${agent.role} de PULSE HQ${agent.department ? ` (${agent.department})` : ''}. ${agent.instructions}${research}\nResponsabilidades: ${agent.responsibilities}\nCiclo: analizar → planificar → actuar con herramientas → observar → evaluar → finalizar.\nHerramientas permitidas:\n${toolCatalog(agent.tools) || '(ninguna)'}\nResponde SIEMPRE con un único objeto JSON.\nUsar herramienta: {"thought":"breve","action":"tool","tool":"nombre","input":{}}\nTerminar: {"thought":"breve","action":"final","summary":"2-3 frases","content_markdown":"entregable completo en Markdown con # y ##","facts":[{"text":"hecho","source_url":"https://..."}],"sources":[{"title":"...","url":"https://..."}]${xlsx ? ',"table":{"sheets":[{"name":"Presupuesto","columns":["Concepto","Cantidad","Costo unitario MXN","Total MXN"],"rows":[["Concepto",1,1000,"=B2*C2"]],"notes":["Supuestos"]}]}' : ''}}\nREGLAS: no inventes datos, marcas, contactos, cifras ni URLs; solo cita URLs devueltas por herramientas en esta tarea o por etapas anteriores; marca lo no verificado como hipótesis; no afirmes haber contactado, publicado ni pagado nada.${xlsx ? ' La tabla debe usar fórmulas reales de Excel (por ejemplo =B2*C2 y =SUM(D2:D9)) y una fila de totales; las cifras son estimaciones explícitas.' : ''}${final ? ' Este es el documento final para el CEO: profesional, completo, en español, con secciones claras.' : ''}`;
+  const allowedTools = agent.tools.includes('wikipedia_summary') ? [...agent.tools, 'wikipedia_research'] : agent.tools;
+  const research = agent.tools.includes('wikipedia_summary') ? ' Método de investigación: identifica las entidades y llama a wikipedia_research con 3 a 5 nombres en UNA sola llamada; completa con wikipedia_summary o fetch_url solo si falta alguna. Necesitas evidencia detallada de al menos 3 entidades antes de finalizar. Si una entidad no tiene artículo, usa el más específico disponible y decláralo.' : '';
+  const system = `Eres ${agent.name}, ${agent.role} de PULSE HQ${agent.department ? ` (${agent.department})` : ''}. ${agent.instructions}${research}\nResponsabilidades: ${agent.responsibilities}\nCiclo: analizar → planificar → actuar con herramientas → observar → evaluar → finalizar.\nHerramientas permitidas:\n${toolCatalog(allowedTools) || '(ninguna)'}\nResponde SIEMPRE con un único objeto JSON.\nUsar herramienta: {"thought":"breve","action":"tool","tool":"nombre","input":{}}\nTerminar: {"thought":"breve","action":"final","summary":"2-3 frases","content_markdown":"entregable completo en Markdown con # y ##","facts":[{"text":"hecho","source_url":"https://..."}],"sources":[{"title":"...","url":"https://..."}]${xlsx ? ',"table":{"sheets":[{"name":"Presupuesto","columns":["Concepto","Cantidad","Costo unitario MXN","Total MXN"],"rows":[["Concepto",1,1000,"=B2*C2"]],"notes":["Supuestos"]}]}' : ''}}\nREGLAS: no inventes datos, marcas, contactos, cifras ni URLs; solo cita URLs devueltas por herramientas en esta tarea o por etapas anteriores; marca lo no verificado como hipótesis; no afirmes haber contactado, publicado ni pagado nada.${xlsx ? ' La tabla debe usar fórmulas reales de Excel (por ejemplo =B2*C2 y =SUM(D2:D9)) y una fila de totales; las cifras son estimaciones explícitas.' : ''}${final ? ' Este es el documento final para el CEO: profesional, completo, en español, con secciones claras.' : ''}`;
   const depText = deps.length ? 'RESULTADOS APROBADOS DE ETAPAS ANTERIORES (reutilízalos, no los regeneres):\n' + deps.map(d => `--- Etapa ${d.seq} (${d.agent_id}) ---\n${String(d.result || '').slice(0, final ? 2600 : 3200)}\nFuentes: ${(d.sources || []).map((s: any) => s.url).join(' ')}`).join('\n') : '';
   const feedback = step.attempt > 0 && step.review ? `CORRECCIÓN SOLICITADA POR CALIDAD (intento ${step.attempt + 1}):\n- ${(step.review.required_changes || step.review.findings || []).join('\n- ')}` : '';
   const maxIter = Math.max(2, agent.max_steps);
   // investigación externa: el motor no acepta un cierre sin evidencia suficiente mientras queden pasos
   const external = (m.plan?.evidence_by_seq?.[step.seq] ?? (agent.id === 'iris' ? 'external' : 'none')) === 'external';
   const candidates: string[] = []; const summarized = new Set<string>();
-  const evidenceCount = () => toolsUsed.filter(t => t === 'wikipedia_summary' || t === 'fetch_url').length;
+  // la evidencia reunida en intentos anteriores de esta misma etapa sigue valiendo (no se reinicia en cada corrección)
+  let prior = 0;
+  if (external && step.attempt > 0) {
+    const { data: prev } = await db.from('pulse_tool_calls').select('tool,output').eq('step_id', step.id).eq('ok', true).in('tool', ['wikipedia_summary', 'fetch_url', 'wikipedia_research']);
+    for (const c of prev || []) {
+      const items = c.tool === 'wikipedia_research' && Array.isArray(c.output) ? c.output.filter((x: any) => x?.found && x?.url) : [];
+      if (c.tool === 'wikipedia_research') { prior += items.length; items.forEach((x: any) => { allowedUrls.set(norm(x.url), x.title || x.url); summarized.add(String(x.title || '')); }); }
+      else { prior += 1; const u = (c.output as any)?.url; if (u) allowedUrls.set(norm(u), (c.output as any)?.title || u); }
+    }
+    if (prior) transcript.push(`SISTEMA: en intentos anteriores ya reuniste ${prior} evidencias detalladas válidas (sus URLs siguen siendo citables). Céntrate en atender las correcciones de Calidad.`);
+  }
+  const evidenceCount = () => prior + toolsUsed.filter(t => t === 'wikipedia_summary' || t === 'fetch_url').length;
   for (let i = 0; i < maxIter; i++) {
     const last = i === maxIter - 1 || timeLeft() < 45000;
     const user = [`MISIÓN: ${m.title}\nOBJETIVO: ${m.objective}`, `TU TAREA (etapa ${step.seq}): ${step.directive}`, `CRITERIOS DE ACEPTACIÓN:\n- ${(step.acceptance || []).join('\n- ')}`, depText, feedback, transcript.join('\n'), last ? 'DEBES FINALIZAR AHORA con "action":"final".' : ''].filter(Boolean).join('\n\n');
@@ -133,13 +145,14 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
     try { j = parseJson(out.text); } catch { transcript.push('SISTEMA: tu respuesta anterior no era JSON válido; responde solo JSON.'); continue; }
     if (j.action === 'tool' && !last) {
       const name = String(j.tool || '');
-      if (!agent.tools.includes(name) || !TOOLS[name]) { transcript.push(`SISTEMA: herramienta no permitida: ${name}`); continue; }
+      if (!allowedTools.includes(name) || !TOOLS[name]) { transcript.push(`SISTEMA: herramienta no permitida: ${name}`); continue; }
       const t0 = Date.now(); let r;
       try { r = await TOOLS[name].run(j.input || {}, { db, userId: ctx.user_id, missionId: ctx.mission_id, agentId: agent.id }); }
       catch (e) { r = { ok: false, output: null, error: String((e as Error)?.message || e).slice(0, 200) }; }
       await db.from('pulse_tool_calls').insert({ ...ctx, tool: name, input: j.input || {}, output: r.ok ? (() => { const sj = JSON.stringify(r.output ?? null); return sj.length <= 20000 ? r.output : { truncated: sj.slice(0, 20000) }; })() : null, ok: r.ok, error: r.error || null, duration_ms: Date.now() - t0 }).then(() => {}, () => {});
       for (const u of r.urls || []) allowedUrls.set(norm(u), u);
-      if (r.ok) toolsUsed.push(name); // solo cuentan las consultas que devolvieron datos
+      if (r.ok && name === 'wikipedia_research') { for (const it of (r.output as any[]).filter((x: any) => x?.found)) { toolsUsed.push('wikipedia_summary'); summarized.add(String(it.title || '')); } }
+      else if (r.ok) toolsUsed.push(name); // solo cuentan las consultas que devolvieron datos
       if (r.ok && name === 'wikipedia_search' && Array.isArray(r.output)) for (const it of (r.output as any[]).slice(0, 3)) if (it?.title && !candidates.includes(it.title)) candidates.push(String(it.title));
       if (r.ok && name === 'wikipedia_summary') summarized.add(String((r.output as any)?.title || j.input?.title || ''));
       transcript.push(`OBSERVACIÓN de ${name}: ${JSON.stringify(r.ok ? r.output : { error: r.error }).slice(0, 2200)}`);
@@ -158,7 +171,7 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
       const sources = [...new Map(cited.filter((s: any) => allowedUrls.has(norm(s.url))).map((s: any) => [norm(s.url), { title: String(s.title || s.url).slice(0, 200), url: String(s.url) }])).values()];
       const dropped = cited.length - sources.length;
       const facts = (Array.isArray(j.facts) ? j.facts : []).slice(0, 12).map((f: any) => ({ text: String(f?.text || '').slice(0, 500), source_url: f?.source_url ? String(f.source_url) : null, verified: !!(f?.source_url && allowedUrls.has(norm(f.source_url))) }));
-      return { content: content + (dropped > 0 ? `\n\n> Nota del motor: se retiraron ${dropped} fuente(s) que no provenían de herramientas.` : ''), summary: String(j.summary || '').slice(0, 600), sources, facts, table: j.table, toolsUsed, dropped };
+      return { content: content + (dropped > 0 ? `\n\n> Nota del motor: se retiraron ${dropped} fuente(s) que no provenían de herramientas.` : ''), summary: String(j.summary || '').slice(0, 600), sources, facts, table: j.table, toolsUsed, dropped, evidence: evidenceCount() };
     }
     transcript.push('SISTEMA: acción no reconocida; usa "tool" o "final".');
   }
@@ -169,7 +182,7 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
 async function review(m: any, step: any, agent: Agent, res: any, file: any, ctx: Ctx) {
   const A = await agents(); const qa = A.calidad;
   const hard: string[] = [];
-  const evidence = (res.toolsUsed || []).filter((t: string) => t === 'wikipedia_summary' || t === 'fetch_url').length;
+  const evidence = Number(res.evidence ?? (res.toolsUsed || []).filter((t: string) => t === 'wikipedia_summary' || t === 'fetch_url').length);
   const external = (m.plan?.evidence_by_seq?.[step.seq] ?? (agent.id === 'iris' ? 'external' : 'none')) === 'external';
   if (external && res.sources.length < 3) hard.push('La investigación tiene menos de 3 fuentes verificadas por herramientas.');
   if (external && evidence < 3) hard.push(`Solo se consultó evidencia detallada (wikipedia_summary/fetch_url) ${evidence} vez/veces; se necesita al menos una por cada entidad principal (mínimo 3).`);
@@ -177,7 +190,8 @@ async function review(m: any, step: any, agent: Agent, res: any, file: any, ctx:
   if (res.dropped > 2) hard.push(`Se citaron ${res.dropped} fuentes no verificadas.`);
   const kind = external ? 'investigación con fuentes públicas' : step.output_format === 'xlsx' ? 'hoja de cálculo financiera' : step.output_format === 'pdf' ? 'documento final consolidado' : 'entregable profesional';
   const system = `${qa.instructions}\nSé exigente y calibrado: 10 solo para trabajo excepcional sin reparos; 7-8 para trabajo correcto listo para cliente; menos de 7 si hay afirmaciones sin fuente presentadas como hechos, supuestos no declarados, cifras sin explicar o incumplimiento de algún criterio. Señala siempre al menos una debilidad concreta en findings. No exijas fuentes que las herramientas disponibles (Wikipedia y páginas públicas) no pueden obtener: si una entidad no tiene artículo propio, acepta la fuente más específica disponible siempre que la limitación quede declarada; tus cambios requeridos deben ser realizables con esas herramientas.\nResponde SOLO JSON: {"verdict":"approve|revise","score":0,"findings":["observación concreta"],"required_changes":["cambio concreto"]}`;
-  const user = `TIPO: ${kind}\nTAREA: ${step.directive}\nCRITERIOS:\n- ${(step.acceptance || []).join('\n- ')}\nFUENTES VERIFICADAS: ${res.sources.map((s: any) => s.url).join(' ') || '(ninguna)'}\n${file ? `ARCHIVO: ${file.name} (${file.bytes} bytes${file.formulas != null ? `, ${file.formulas} fórmulas` : ''})\n` : ''}${res.table ? `TABLA: ${JSON.stringify(res.table).slice(0, 2500)}\n` : ''}\nENTREGABLE:\n${res.content.slice(0, 9000)}\n\nAprueba solo si cumple los criterios, es coherente, no inventa datos y está listo para un cliente. Puntúa de 0 a 10.`;
+  const prevReview = step.attempt > 0 && step.review?.required_changes?.length ? `\nREVISIÓN ANTERIOR (intento ${step.attempt}): pediste estos cambios:\n- ${step.review.required_changes.join('\n- ')}\nEvalúa sobre todo si se atendieron. No agregues exigencias nuevas salvo errores graves (datos inventados, fuentes falsas o incumplimiento claro de un criterio).\n` : '';
+  const user = `TIPO: ${kind}${prevReview}\nTAREA: ${step.directive}\nCRITERIOS:\n- ${(step.acceptance || []).join('\n- ')}\nFUENTES VERIFICADAS: ${res.sources.map((s: any) => s.url).join(' ') || '(ninguna)'}\n${file ? `ARCHIVO: ${file.name} (${file.bytes} bytes${file.formulas != null ? `, ${file.formulas} fórmulas` : ''})\n` : ''}${res.table ? `TABLA: ${JSON.stringify(res.table).slice(0, 2500)}\n` : ''}\nENTREGABLE:\n${res.content.slice(0, 9000)}\n\nAprueba solo si cumple los criterios, es coherente, no inventa datos y está listo para un cliente. Puntúa de 0 a 10.`;
   const out = await llm({ ...ctx, agent_id: 'calidad' }, 'evaluate', qa.model_tier, system, user, 1200);
   let r: any; try { r = parseJson(out.text); } catch { r = { verdict: 'revise', score: 0, findings: ['El revisor no devolvió un dictamen válido'], required_changes: [] }; }
   const score = Number(r.score) || 0;

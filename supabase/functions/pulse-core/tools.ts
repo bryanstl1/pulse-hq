@@ -47,6 +47,29 @@ export const TOOLS: Record<string, Tool> = {
       return { ok: true, output: { title: j?.title, extract: str(j?.extract, 2500), url }, urls: url ? [url] : [] };
     }
   },
+  wikipedia_research: {
+    description: 'Evidencia de varias entidades en una sola llamada: para cada nombre busca el artículo más relevante y devuelve su resumen y URL. Úsala para investigar 3 a 5 entidades a la vez.',
+    input: '{"entities":["Nombre 1","Nombre 2","Nombre 3"],"lang":"es|en"}',
+    async run(i) {
+      const lang = i?.lang === 'en' ? 'en' : 'es';
+      const names = (Array.isArray(i?.entities) ? i.entities : []).map((x: unknown) => str(x, 120)).filter((x: string) => x.length >= 2).slice(0, 5);
+      if (!names.length) return { ok: false, output: null, error: 'entities vacío' };
+      const items: any[] = [];
+      for (const name of names) {
+        try {
+          const sr = await fetch(`https://${lang}.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=1&srsearch=${encodeURIComponent(name)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
+          const title = sr.ok ? (await sr.json())?.query?.search?.[0]?.title : null;
+          if (!title) { items.push({ entity: name, found: false }); continue; }
+          const r = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(String(title).replace(/ /g, '_'))}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
+          if (!r.ok) { items.push({ entity: name, found: false, title }); continue; }
+          const j = await r.json();
+          items.push({ entity: name, found: true, title: j?.title, extract: str(j?.extract, 1200), url: j?.content_urls?.desktop?.page });
+        } catch { items.push({ entity: name, found: false }); }
+      }
+      const urls = items.filter(x => x.found && x.url).map(x => x.url);
+      return { ok: urls.length > 0, output: items, urls, error: urls.length ? undefined : 'Sin artículos encontrados' };
+    }
+  },
   fetch_url: {
     description: 'Lee el texto de una página pública https (máx. 6000 caracteres). No accede a redes internas.',
     input: '{"url":"https://..."}',
