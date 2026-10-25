@@ -121,6 +121,10 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
   const depText = deps.length ? 'RESULTADOS APROBADOS DE ETAPAS ANTERIORES (reutilízalos, no los regeneres):\n' + deps.map(d => `--- Etapa ${d.seq} (${d.agent_id}) ---\n${String(d.result || '').slice(0, final ? 2600 : 3200)}\nFuentes: ${(d.sources || []).map((s: any) => s.url).join(' ')}`).join('\n') : '';
   const feedback = step.attempt > 0 && step.review ? `CORRECCIÓN SOLICITADA POR CALIDAD (intento ${step.attempt + 1}):\n- ${(step.review.required_changes || step.review.findings || []).join('\n- ')}` : '';
   const maxIter = Math.max(2, agent.max_steps);
+  // investigación externa: el motor no acepta un cierre sin evidencia suficiente mientras queden pasos
+  const external = (m.plan?.evidence_by_seq?.[step.seq] ?? (agent.id === 'iris' ? 'external' : 'none')) === 'external';
+  const candidates: string[] = []; const summarized = new Set<string>();
+  const evidenceCount = () => toolsUsed.filter(t => t === 'wikipedia_summary' || t === 'fetch_url').length;
   for (let i = 0; i < maxIter; i++) {
     const last = i === maxIter - 1 || timeLeft() < 45000;
     const user = [`MISIÓN: ${m.title}\nOBJETIVO: ${m.objective}`, `TU TAREA (etapa ${step.seq}): ${step.directive}`, `CRITERIOS DE ACEPTACIÓN:\n- ${(step.acceptance || []).join('\n- ')}`, depText, feedback, transcript.join('\n'), last ? 'DEBES FINALIZAR AHORA con "action":"final".' : ''].filter(Boolean).join('\n\n');
@@ -135,8 +139,15 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
       catch (e) { r = { ok: false, output: null, error: String((e as Error)?.message || e).slice(0, 200) }; }
       await db.from('pulse_tool_calls').insert({ ...ctx, tool: name, input: j.input || {}, output: r.ok ? (() => { const sj = JSON.stringify(r.output ?? null); return sj.length <= 20000 ? r.output : { truncated: sj.slice(0, 20000) }; })() : null, ok: r.ok, error: r.error || null, duration_ms: Date.now() - t0 }).then(() => {}, () => {});
       for (const u of r.urls || []) allowedUrls.set(norm(u), u);
-      toolsUsed.push(name);
-      transcript.push(`OBSERVACIÓN de ${name}: ${JSON.stringify(r.ok ? r.output : { error: r.error }).slice(0, 3500)}`);
+      if (r.ok) toolsUsed.push(name); // solo cuentan las consultas que devolvieron datos
+      if (r.ok && name === 'wikipedia_search' && Array.isArray(r.output)) for (const it of (r.output as any[]).slice(0, 3)) if (it?.title && !candidates.includes(it.title)) candidates.push(String(it.title));
+      if (r.ok && name === 'wikipedia_summary') summarized.add(String((r.output as any)?.title || j.input?.title || ''));
+      transcript.push(`OBSERVACIÓN de ${name}: ${JSON.stringify(r.ok ? r.output : { error: r.error }).slice(0, 2200)}`);
+      continue;
+    }
+    if (j.action === 'final' && !last && external && evidenceCount() < 3) {
+      const pending = candidates.filter(c => !summarized.has(c)).slice(0, 5);
+      transcript.push(`SISTEMA: todavía no puedes finalizar. Llevas ${evidenceCount()} consulta(s) de evidencia detallada y se necesitan al menos 3. Llama a wikipedia_summary con el título exacto de estas entidades encontradas en tus búsquedas: ${pending.join(' | ') || '(haz una búsqueda por cada entidad)'}.`);
       continue;
     }
     if (j.action === 'final' || last) {
