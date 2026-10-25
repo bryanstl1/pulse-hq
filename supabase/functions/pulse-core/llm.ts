@@ -11,7 +11,18 @@ interface Provider { id: string; model: (t: Tier) => string; call: (m: string, r
 
 const env = (k: string) => Deno.env.get(k) || '';
 
-class ProviderError extends Error { constructor(msg: string, public status: number, public retryable: boolean) { super(msg); } }
+class ProviderError extends Error { constructor(msg: string, public status: number, public retryable: boolean, public retryAfterMs = 0) { super(msg); } }
+
+// Gemini indica cuánto esperar tras un 429 en error.details[].retryDelay (p. ej. "23s").
+function retryDelayMs(body: any): number {
+  const d = (body?.error?.details || []).map((x: any) => x?.retryDelay).find(Boolean);
+  const n = parseFloat(String(d || '')); return Number.isFinite(n) ? Math.round(n * 1000) : 0;
+}
+
+// Ritmo mínimo entre llamadas para no agotar el límite por minuto del plan gratuito.
+const MIN_GAP_MS = Number(Deno.env.get('PULSE_LLM_MIN_GAP_MS') || 2500);
+let lastCallAt = 0;
+async function pace() { const wait = lastCallAt + MIN_GAP_MS - Date.now(); if (wait > 0) await new Promise(r => setTimeout(r, wait)); lastCallAt = Date.now(); }
 
 async function httpJson(url: string, init: RequestInit, timeoutMs = 60000) {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
@@ -35,7 +46,7 @@ function gemini(): Provider | null {
           generationConfig: { temperature: r.temperature ?? 0.35, maxOutputTokens: r.maxTokens ?? 3000, ...(r.json ? { responseMimeType: 'application/json' } : {}) }
         })
       });
-      if (!res.ok) throw new ProviderError(`gemini ${res.status} ${String(body?.error?.status || '').slice(0, 40)}`, res.status, res.status === 429 || res.status >= 500);
+      if (!res.ok) throw new ProviderError(`gemini ${res.status} ${String(body?.error?.status || '').slice(0, 40)}`, res.status, res.status === 429 || res.status >= 500, retryDelayMs(body));
       const cand = body?.candidates?.[0];
       const text = (cand?.content?.parts || []).filter((p: { text?: string }) => typeof p.text === 'string').map((p: { text: string }) => p.text).join('').trim();
       if (!text) throw new ProviderError(`gemini sin texto (${cand?.finishReason || 'sin candidato'})`, 502, true);
@@ -81,7 +92,7 @@ export function providers(): Provider[] {
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 /** Enruta por complejidad: rápido → proveedor más barato disponible; razonamiento → Gemini primero. */
-export async function complete(r: LLMRequest, onAttempt: (a: Attempt) => Promise<void> | void): Promise<LLMResult> {
+export async function complete(r: LLMRequest, onAttempt: (a: Attempt) => Promise<void> | void, deadline = 0): Promise<LLMResult> {
   const list = providers();
   if (!list.length) throw new Error('No hay proveedores de IA configurados (falta GEMINI_API_KEY).');
   const ordered = r.tier === 'fast' ? [...list.filter(p => p.id === 'groq'), ...list.filter(p => p.id !== 'groq')] : list;
@@ -91,6 +102,7 @@ export async function complete(r: LLMRequest, onAttempt: (a: Attempt) => Promise
     for (let attempt = 0; attempt < 3; attempt++) {
       const t0 = Date.now();
       try {
+        await pace();
         const out = await p.call(model, r);
         await onAttempt({ provider: p.id, model, ok: true, ms: out.ms, inTok: out.inTok, outTok: out.outTok });
         return out;
@@ -100,7 +112,10 @@ export async function complete(r: LLMRequest, onAttempt: (a: Attempt) => Promise
         const retryable = err instanceof ProviderError ? err.retryable : true; // timeouts y red
         await onAttempt({ provider: p.id, model, ok: false, status: err?.status, error: last, ms: Date.now() - t0 });
         if (!retryable) break;
-        await sleep([2000, 6000, 12000][attempt]);
+        // 429: respeta el tiempo indicado por el proveedor (máx. 30 s) sin pasarse del tiempo de la ejecución
+        let wait = Math.max([2000, 6000, 12000][attempt], Math.min(err instanceof ProviderError ? err.retryAfterMs : 0, 30000));
+        if (deadline && Date.now() + wait > deadline - 20000) { last += ' (sin tiempo para reintentar en esta ejecución)'; break; }
+        await sleep(wait);
       }
     }
   }

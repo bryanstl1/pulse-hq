@@ -134,3 +134,21 @@ export async function createXlsx(sheets: SheetSpec[], title: string): Promise<{ 
   if (!back.file('xl/workbook.xml') || !back.file('xl/worksheets/sheet1.xml')) throw new Error('XLSX inválido');
   return { bytes, formulas };
 }
+
+// ——— Diagnóstico: reabre un archivo descargado y resume su estructura ———
+export async function inspectFile(bytes: Uint8Array, mime: string) {
+  const head = new TextDecoder('latin1').decode(bytes.slice(0, 5));
+  if (mime === 'application/pdf') {
+    const doc = await PDFDocument.load(bytes);
+    return { valid: head === '%PDF-', pages: doc.getPageCount(), title: doc.getTitle() || null };
+  }
+  if (mime.includes('spreadsheetml')) {
+    const zip = await JSZip.loadAsync(bytes);
+    const sheets = Object.keys(zip.files).filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n));
+    let formulas = 0, rows = 0;
+    for (const n of sheets) { const x = await zip.file(n)!.async('string'); formulas += (x.match(/<f>/g) || []).length; rows += (x.match(/<row /g) || []).length; }
+    return { valid: head.startsWith('PK') && !!zip.file('xl/workbook.xml'), sheets: sheets.length, rows, formulas };
+  }
+  const text = new TextDecoder().decode(bytes);
+  return { valid: text.trim().length > 0, chars: text.length, firstLine: text.split('\n')[0].slice(0, 120) };
+}

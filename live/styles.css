@@ -186,3 +186,4 @@ form input, form textarea { width: 100%; border: 1px solid var(--line); border-r
 .realnote { background: #eef7f1; color: #2d6a45; border-radius: 10px; padding: 8px 10px; font-size: 12px; margin: 8px 0; }
 .portrait.xs.qa { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #2d6a45; color: #fff; font-size: 13px; flex: none; }
 .sheet-head .who small.detail, .sheet-head .who small.evidence { display: block; text-transform: none; letter-spacing: 0; font-weight: 500; margin-top: 4px; } .sheet-head .who small.detail { font-size: 12px; color: #6b6052; } .sheet-head .who .pill { margin-top: 4px; }
+.steps-help { margin: 6px 0 10px 18px; padding: 0; font-size: 13px; line-height: 1.45; } .steps-help li { margin: 4px 0; }

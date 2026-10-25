@@ -106,3 +106,51 @@ test('simulación: Ulises → Recibiendo → plan → tres agentes con Calidad �
   assert.ok(ent.snapshot.messages.every(x => x.mission_id !== r.missionId || x.content.startsWith('[Simulación]')), 'todo lo simulado va rotulado');
   client.dispose();
 });
+
+import { friendlyError, snapshotSignature } from '../live/src/data/enterprise.js';
+
+test('errores de red de iOS se traducen sin ocultar errores reales', () => {
+  assert.match(friendlyError(new TypeError('Load failed')), /no llegó al servidor/);
+  assert.match(friendlyError(new TypeError('Failed to fetch')), /no llegó al servidor/);
+  assert.match(friendlyError({ message: 'email rate limit exceeded' }), /limitó los correos/);
+  assert.match(friendlyError({ message: 'Token has expired or is invalid' }), /caducó/);
+  assert.equal(friendlyError({ message: 'Cuenta no autorizada' }), 'Cuenta no autorizada');
+});
+
+test('la firma del snapshot no cambia si los datos no cambian (sin redibujos inútiles)', () => {
+  const a = { tasks: [{ id: 't', status: 'running', updated_at: 'x' }], missions: [], steps: [], approvals: [], deliverables: [], messages: [], runs: [] };
+  const b = JSON.parse(JSON.stringify(a)); b.loadedAt = 'otro';
+  assert.equal(snapshotSignature(a), snapshotSignature(b));
+  b.tasks[0].status = 'completed';
+  assert.notEqual(snapshotSignature(a), snapshotSignature(b));
+});
+
+test('Ulises: respuesta directa → Resultado recibido sin pasos de misión', () => {
+  const s = { missions: [{ id: 'mr', engine: 'core', status: 'completed', title: 'Saludo', created_at: at(20) }], steps: [], runs: [],
+    messages: [{ id: 'rep', mission_id: 'mr', from_agent: 'ulises', to_agent: 'ceo', kind: 'result', artifact: { mode: 'reply' }, created_at: at(10) }] };
+  const i = coreIntent(s, 'Dirección estratégica', NOW);
+  assert.equal(i.label, 'Resultado recibido'); assert.equal(i.evidence.message, 'rep');
+});
+
+test('el envío de enlaces tiene enfriamiento de 60 s para evitar el 429', async () => {
+  const mem = {}; globalThis.localStorage = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; } };
+  globalThis.location = { origin: 'https://x.test', pathname: '/live/' };
+  let sent = 0;
+  const fake = { auth: { getUser: async () => ({ data: { user: null }, error: null }), onAuthStateChange: () => ({}), signInWithOtp: async () => { sent++; return { error: null }; } } };
+  const ent = createEnterprise(fake); await ent.init();
+  await ent.requestLogin('ceo@x.test');
+  await assert.rejects(ent.requestLogin('ceo@x.test'), /espera \d+ s/);
+  assert.equal(sent, 1);
+  delete globalThis.localStorage; delete globalThis.location;
+});
+
+test('simulación: un saludo a Ulises recibe respuesta directa sin misión', async () => {
+  const client = createDemoClient({ speed: 50 });
+  const ent = createEnterprise(client, { mode: 'demo' }); await ent.init();
+  const r = await ent.askUlises('Hola Ulises, ¿cómo estás hoy?');
+  await new Promise(res => setTimeout(res, 200)); await ent.refresh();
+  assert.equal(ent.snapshot.missions.find(m => m.id === r.missionId).status, 'completed');
+  assert.equal(ent.snapshot.steps.filter(x => x.mission_id === r.missionId).length, 0);
+  assert.equal(deriveIntents(ent.snapshot, ['Dirección estratégica'], { connected: true })['Dirección estratégica'].label, 'Resultado recibido');
+  client.dispose();
+});

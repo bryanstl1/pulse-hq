@@ -10,7 +10,7 @@ import { Overlay } from './ui/overlay.js';
 import * as P from './ui/panels.js';
 import { ROOMS, AGENTS, roomById, roomIndex } from './data/roster.js';
 import { deriveIntents, companySummary } from './data/activity.js';
-import { createEnterprise, loadSupabaseClient, DEPARTMENTS } from './data/enterprise.js';
+import { createEnterprise, loadSupabaseClient, DEPARTMENTS, friendlyError } from './data/enterprise.js';
 import { createDemoClient } from './data/demo-client.js';
 
 const $ = s => document.querySelector(s);
@@ -71,7 +71,12 @@ function schedulePoll() {
   clearTimeout(pollTimer);
   if (!app.connected) return;
   const fast = Object.values(app.sending).some(Boolean) || app.agents.some(a => ['receiving', 'running', 'mission'].includes(a.intent.kind));
-  pollTimer = setTimeout(async () => { try { await app.ent.refresh(); } catch { } recompute(); schedulePoll(); }, fast ? 2500 : 10000);
+  // en segundo plano no se consulta (iOS corta las solicitudes y desperdicia batería); al volver se actualiza
+  pollTimer = setTimeout(async () => {
+    if (document.hidden) { schedulePoll(); return; }
+    try { await app.ent.refresh(); } catch { }
+    recompute(); schedulePoll();
+  }, fast ? 4000 : 12000);
 }
 
 function recompute() {
@@ -91,11 +96,16 @@ function recompute() {
   if (app.summary?.approvals) counts['ceo:ceo-tray'] = app.summary.approvals;
   if (app.summary?.activeMissions) counts['missions:mission-board'] = app.summary.activeMissions;
   overlay.setCounts(counts);
-  const key = `${app.mode}|${app.connected}|${snap.loadedAt}`;
-  if (key !== app.snapshotKey) { app.snapshotKey = key; drawSurfaces(office.surfaces, app); if (app.sheet) renderSheet(true); }
+  // solo se redibujan tableros y panel cuando cambian los datos (no en cada sondeo)
+  const key = `${app.mode}|${app.connected}|${snap.sig || snap.loadedAt}`;
+  if (key !== app.snapshotKey) { app.snapshotKey = key; drawSurfaces(office.surfaces, app); if (app.sheet && !isTyping()) renderSheet(true); else if (app.sheet) app.sheetStale = true; }
   updateHud();
   schedulePoll();
 }
+
+// No redibujar el panel mientras el CEO escribe: se aplica al terminar.
+function isTyping() { const el = document.activeElement; return !!(el && el.closest && el.closest('#sheet') && /^(TEXTAREA|INPUT)$/.test(el.tagName)); }
+document.addEventListener('focusout', () => setTimeout(() => { if (app.sheetStale && !isTyping()) { app.sheetStale = false; if (app.sheet) renderSheet(true); } }, 50));
 
 const LAMP = { receiving: '#8f7cf0', running: '#3cd17a', review: '#f2b33d', failed: '#e5484d', mission: '#4a90e2', completed: '#7ed6a5' };
 function setLamp(roomId, kind) {
@@ -254,7 +264,7 @@ sheetEl.addEventListener('click', async e => {
     if (act === 'close') closeSheet();
     else if (act === 'back') back();
     else if (act === 'tab') { app.sheet.tab = el.dataset.tab; renderSheet(); }
-    else if (act === 'task') openSheet({ type: 'task', id }, { push: true });
+    else if (act === 'task') { openSheet({ type: 'task', id }, { push: true }); loadTaskResult(id); }
     else if (act === 'mission') openSheet({ type: 'mission', id }, { push: true });
     else if (act === 'agent') { if (id) { closeSheet(); selectAgent(id); } }
     else if (act === 'agent-room') { const a = AGENTS.find(x => x.room === el.dataset.room); if (a) { closeSheet(); selectAgent(a.id); } }
@@ -267,12 +277,13 @@ sheetEl.addEventListener('click', async e => {
     else if (act === 'demo') { closeSheet(); await startDemo(); toast('Simulación local activada · datos inventados', 'warn'); }
     else if (act === 'exit-demo') { app.ent?.client?.dispose?.(); app.ent = null; app.mode = 'none'; closeSheet(); history.replaceState(null, '', location.pathname + location.hash); await startLive(); }
     else if (act === 'access-reset') { app.accessStep = 'email'; renderSheet(); }
+    else if (act === 'check-session') { el.disabled = true; const ok = await app.ent.checkSession(); recompute(); if (ok) { closeSheet(); toast('Sesión iniciada', 'ok'); } else { el.disabled = false; toast('Todavía no hay sesión en este navegador. Abre el enlace del correo en este mismo navegador.', 'warn'); } }
     else if (act === 'logout') { await app.ent.signOut(); closeSheet(); recompute(); }
     else if (act === 'refresh') { await app.ent?.refresh(); recompute(); toast('Instantánea actualizada', 'ok'); }
     else if (act === 'open-approvals') openSheet({ type: 'approvals' }, { push: true });
     else if (act === 'open-missions') openSheet({ type: 'missions' }, { push: true });
     else if (act === 'open-files') openSheet({ type: 'files' }, { push: true });
-  } catch (err) { toast(err.message || String(err), 'error'); el.disabled = false; }
+  } catch (err) { toast(friendlyError(err), 'error'); el.disabled = false; }
 });
 sheetEl.addEventListener('change', e => {
   if (e.target.dataset.action === 'ambient') { app.ambient = e.target.checked; app.agents.forEach(a => a.setAmbient(app.ambient)); renderSheet(true); updateHud(); }
@@ -287,7 +298,7 @@ sheetEl.addEventListener('submit', async e => {
     else if (act === 'login') { btn.disabled = true; app.accessEmail = data.email; await app.ent.requestLogin(data.email); app.accessStep = 'sent'; renderSheet(); }
     else if (act === 'verify-link') { btn.disabled = true; await app.ent.verifyLink(data.link); toast('Sesión iniciada', 'ok'); closeSheet(); await app.ent.refresh(); recompute(); }
     else if (act === 'verify-code') { btn.disabled = true; await app.ent.verifyCode(app.accessEmail, data.code); toast('Sesión iniciada', 'ok'); closeSheet(); await app.ent.refresh(); recompute(); }
-  } catch (err) { toast(err.message || String(err), 'error'); if (btn) btn.disabled = false; }
+  } catch (err) { toast(friendlyError(err), 'error'); if (btn) btn.disabled = false; }
 });
 sheetEl.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && e.target.name === 'instruction') { e.preventDefault(); e.target.form.requestSubmit(); }
@@ -312,18 +323,26 @@ async function sendInstruction(dept, text) {
       toast(app.mode === 'demo' ? `${agent.def.name}: resultado simulado listo` : `${agent.def.name}: el servidor registró el resultado`, 'ok');
     }
   } catch (err) {
-    toast(`No se completó: ${err.message}`, 'error');
+    toast(`No se completó: ${friendlyError(err)}`, 'error');
     try { await app.ent.refresh(); } catch { }
   } finally {
     app.sending[dept] = false; agent.clearLocal(); recompute(); if (app.sheet) renderSheet(true);
   }
 }
 
+async function loadTaskResult(id) {
+  app.taskResults = app.taskResults || {};
+  if (app.taskResults[id] || !app.ent?.taskResult) return;
+  try { app.taskResults[id] = await app.ent.taskResult(id); if (app.sheet?.type === 'task' && app.sheet.id === id) renderSheet(true); } catch { }
+}
 async function openFile(id) {
-  // abrir la ventana dentro del gesto evita el bloqueo de ventanas emergentes en Safari
+  // PDF se abre en el visor del navegador; XLSX y Markdown se descargan (iOS los muestra en Vista rápida / Archivos).
+  // La ventana se abre dentro del gesto del usuario para que Safari y Chrome en iPhone no la bloqueen.
+  const rec = app.ent.snapshot.deliverables.find(x => x.id === id);
+  const download = rec && rec.mime_type !== 'application/pdf';
   const win = window.open('', '_blank');
-  try { const url = await app.ent.fileUrl(id); if (win) win.location.href = url; else location.href = url; }
-  catch (err) { win?.close(); throw err; }
+  try { const url = await app.ent.fileUrl(id, { download }); if (win && !win.closed) win.location.href = url; else location.href = url; }
+  catch (err) { try { win?.close(); } catch { } throw err; }
 }
 
 // ——— Dock y navegación ———
@@ -346,7 +365,12 @@ window.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') stage.goToRoom(app.roomIndex - 1);
   if (e.key === 'Escape') closeSheet();
 });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && app.connected) app.ent.refresh().then(recompute).catch(() => { }); });
+// Al volver a la app (p. ej. desde Mail): comprobar si la sesión se inició en otra pestaña y actualizar.
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !app.ent) return;
+  try { if (app.mode === 'live') await app.ent.checkSession(); if (app.connected || app.ent.user) await app.ent.refresh(); } catch { }
+  recompute(); if (app.sheet?.type === 'access' && app.ent.user) { closeSheet(); toast('Sesión iniciada', 'ok'); }
+});
 
 let toastTimer;
 function toast(msg, kind = 'info') {
@@ -392,8 +416,18 @@ function tick(dt, now, draw = true) {
   if (CAPTURE) return;
   // calidad adaptativa: baja la resolución si el teléfono no sostiene ~40 fps
   frameAvg = frameAvg * 0.95 + (dt * 1000) * 0.05;
-  if (frameAvg > 25) { slowFor += dt; if (slowFor > 2 && dprLevel < DPRS.length - 1) { dprLevel++; stage.renderer.setPixelRatio(DPRS[dprLevel]); stage.resize(); slowFor = 0; if (dprLevel >= 2) stage.renderer.shadowMap.enabled = true; } } else slowFor = 0;
+  if (frameAvg > 25) { slowFor += dt; if (slowFor > 2 && dprLevel < DPRS.length - 1) { dprLevel++; stage.renderer.setPixelRatio(DPRS[dprLevel]); stage.resize(); slowFor = 0; if (dprLevel >= 2 && stage.renderer.shadowMap.enabled) disableShadows(); } } else slowFor = 0;
 }
+// Con el teléfono lento, las sombras son lo más caro: se desactivan (antes se activaban por error).
+function disableShadows() {
+  stage.renderer.shadowMap.enabled = false;
+  stage.scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
+}
+// Si iOS libera el contexto WebGL por memoria, la escena se congelaría: se recarga de forma controlada.
+stage.renderer.domElement.addEventListener('webglcontextlost', e => {
+  e.preventDefault(); toast('El navegador liberó los gráficos por memoria; recargando la oficina…', 'warn');
+  setTimeout(() => location.reload(), 1800);
+}, false);
 requestAnimationFrame(frame);
 // La vista previa alojada en Claude no puede conectarse a Supabase: arranca en simulación.
 if (params.get('demo') === '1' || globalThis.PULSE_PREVIEW === 'demo') await startDemo(); else startLive();

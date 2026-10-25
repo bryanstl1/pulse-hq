@@ -5,7 +5,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { complete, parseJson, type Tier } from './llm.ts';
 import { TOOLS, toolCatalog } from './tools.ts';
-import { createPdf, createXlsx, validateSheets } from './files.ts';
+import { createPdf, createXlsx, validateSheets, inspectFile } from './files.ts';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (o: unknown, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { ...cors, 'Content-Type': 'application/json; charset=utf-8' } });
@@ -23,6 +23,10 @@ const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 type Agent = { id: string; name: string; department: string | null; role: string; responsibilities: string; instructions: string; tools: string[]; model_tier: Tier; max_steps: number };
 type Ctx = { user_id: string; mission_id: string; step_id: string | null; agent_id: string };
 class BudgetError extends Error {}
+class OutOfTime extends Error {}
+// Límite de la ejecución actual (la función tiene ~150 s de reloj): los agentes cierran antes de llegar a él.
+let deadline = 0;
+const timeLeft = () => (deadline ? deadline - Date.now() : Infinity);
 
 let agentCache: Record<string, Agent> | null = null;
 async function agents() {
@@ -45,10 +49,11 @@ async function llm(ctx: Ctx, phase: string, tier: Tier, system: string, user: st
   if (m && (m.spent_tokens || 0) >= (m.budget_tokens || LIMITS.budgetTokens)) throw new BudgetError('Presupuesto de tokens de la misión agotado');
   if (m && ['paused', 'cancelled'].includes(m.status)) throw new Error(`Misión ${m.status}`);
   let used = 0;
+  if (timeLeft() < 15000) throw new OutOfTime('Sin tiempo en esta ejecución; la etapa continúa en la siguiente');
   const out = await complete({ tier, system, user, json: true, maxTokens }, async a => {
     await db.from('pulse_runs').insert({ ...ctx, phase, provider: a.provider, model: a.model, input_tokens: a.inTok ?? null, output_tokens: a.outTok ?? null, latency_ms: a.ms, status: a.ok ? 'ok' : 'retry', error: a.error || null });
     if (a.ok) { used = (a.inTok || 0) + (a.outTok || 0); await db.rpc('pulse_core_add_usage', { p_provider: a.provider, p_in: a.inTok || 0, p_out: a.outTok || 0 }); }
-  });
+  }, deadline);
   await db.from('pulse_missions').update({ spent_tokens: (m?.spent_tokens || 0) + used, updated_at: new Date().toISOString() }).eq('id', ctx.mission_id);
   return out;
 }
@@ -60,9 +65,16 @@ async function planMission(m: any) {
   const roster = Object.values(A).filter(a => !['ulises', 'calidad'].includes(a.id)).map(a => `- ${a.id}: ${a.name}, ${a.role}. ${a.responsibilities}`).join('\n');
   const ctx: Ctx = { user_id: m.user_id, mission_id: m.id, step_id: null, agent_id: 'ulises' };
   const system = `${ulises.instructions}\nResponde ÚNICAMENTE con un objeto JSON válido.`;
-  const user = `MISIÓN: ${m.title}\nOBJETIVO DEL CEO: ${m.objective}\n\nAGENTES DISPONIBLES:\n${roster}\n\nDevuelve: {"understanding":"qué se pide y para qué","constraints":["restricciones"],"deliverables":["entregables finales"],"tasks":[{"seq":1,"agent":"id","title":"título corto","directive":"instrucción concreta y autocontenida, con el resultado esperado","depends_on":[],"acceptance":["criterio verificable"],"output_format":"markdown"}]}\nREGLAS: entre 3 y ${LIMITS.maxPlanTasks} tareas; usa solo los ids listados; depends_on solo puede citar tareas anteriores; si se necesita evidencia externa, la primera tarea es de iris; las cifras y presupuestos van con tomas en "output_format":"xlsx"; el resto en "markdown"; no incluyas la consolidación final, la hará Ulises; no atribuyas al solicitante un perfil, audiencia o cifras que no estén en el objetivo: si faltan, ordena que se declaren como supuestos; para investigar varias marcas o empresas pide a iris como máximo 5 y evidencia por cada una.`;
+  const user = `MISIÓN: ${m.title}\nOBJETIVO DEL CEO: ${m.objective}\n\nAGENTES DISPONIBLES:\n${roster}\n\nPRIMERO decide el modo: "reply" si el mensaje es un saludo, una conversación, una pregunta breve o algo que puedes responder tú mismo sin investigación ni archivos; "mission" solo si pide trabajo con entregables (estrategias, investigaciones, propuestas, presupuestos, planes, documentos).\nSi es "reply" devuelve: {"mode":"reply","reply":"tu respuesta al CEO en español, cordial, concreta y honesta (no inventes métricas ni estados internos)"}\nSi es "mission" devuelve: {"mode":"mission","understanding":"qué se pide y para qué","constraints":["restricciones"],"deliverables":["entregables finales"],"tasks":[{"seq":1,"agent":"id","title":"título corto","directive":"instrucción concreta y autocontenida, con el resultado esperado","depends_on":[],"acceptance":["criterio verificable"],"output_format":"markdown","evidence":"external|none"}]}\nREGLAS: "evidence":"external" solo para tareas que deban apoyarse en fuentes públicas verificables (iris investigando entidades, mercados o tendencias); "none" para redacción, estrategia, cálculos o planes; ningún agente tiene acceso a métricas internas de PULSE HQ, así que no encargues revisarlas; entre 3 y ${LIMITS.maxPlanTasks} tareas; usa solo los ids listados; depends_on solo puede citar tareas anteriores; si se necesita evidencia externa, la primera tarea es de iris; las cifras y presupuestos van con tomas en "output_format":"xlsx"; el resto en "markdown"; no incluyas la consolidación final, la hará Ulises; no atribuyas al solicitante un perfil, audiencia o cifras que no estén en el objetivo: si faltan, ordena que se declaren como supuestos; para investigar varias marcas o empresas pide a iris como máximo 5 y evidencia por cada una.`;
   const out = await llm(ctx, 'plan', 'smart', system, user, 2500);
   const plan = parseJson<any>(out.text);
+  if (plan.mode === 'reply' || (!Array.isArray(plan.tasks) && typeof plan.reply === 'string')) {
+    const reply = String(plan.reply || '').trim().slice(0, 3000);
+    if (reply.length < 2) throw new Error('Ulises no devolvió una respuesta');
+    await message(ctx, 'ulises', 'ceo', 'result', reply, { mode: 'reply' });
+    await db.from('pulse_missions').update({ plan: { mode: 'reply' }, status: 'completed', claimed_at: null, owner_agent: 'ulises', updated_at: new Date().toISOString() }).eq('id', m.id);
+    return;
+  }
   const valid = new Set(Object.keys(A).filter(id => !['ulises', 'calidad'].includes(id)));
   const raw = (Array.isArray(plan.tasks) ? plan.tasks : []).filter((t: any) => valid.has(t?.agent) && String(t?.directive || '').length >= 10).slice(0, LIMITS.maxPlanTasks);
   if (raw.length < 1) throw new Error('El plan de Ulises no contiene tareas válidas');
@@ -76,7 +88,8 @@ async function planMission(m: any) {
       mission_id: m.id, user_id: m.user_id, seq, department: agent.department, agent_id: agent.id, status: 'pending',
       directive: `${String(t.title || '').slice(0, 120)}: ${String(t.directive).slice(0, 1600)}`.replace(/^: /, ''),
       depends_on: deps, acceptance: (Array.isArray(t.acceptance) ? t.acceptance : []).slice(0, 6).map((x: unknown) => String(x).slice(0, 300)),
-      output_format: t.output_format === 'xlsx' ? 'xlsx' : 'markdown'
+      output_format: t.output_format === 'xlsx' ? 'xlsx' : 'markdown',
+      evidence: t.evidence === 'external' ? 'external' : 'none'
     };
   });
   const finalSeq = steps.length + 1;
@@ -85,9 +98,11 @@ async function planMission(m: any) {
     directive: 'Consolidar los resultados aprobados de todas las etapas en el documento final de la misión, con resumen ejecutivo, hallazgos con fuentes, estrategia, propuesta, presupuesto, plan de acción, riesgos y próximos pasos.',
     depends_on: steps.map((s: any) => s.seq), acceptance: ['Integra todas las etapas sin contradicciones', 'Cita solo fuentes verificadas', 'Incluye plan de acción y riesgos'], output_format: 'pdf'
   });
+  const evidenceBySeq = Object.fromEntries(steps.map((s: any) => [s.seq, s.evidence || 'none']));
+  steps.forEach((s: any) => delete s.evidence);
   const { data: inserted, error } = await db.from('pulse_mission_steps').insert(steps).select('id,seq,agent_id,directive');
   if (error) throw error;
-  await db.from('pulse_missions').update({ plan, status: 'running', claimed_at: null, owner_agent: 'ulises', updated_at: new Date().toISOString() }).eq('id', m.id);
+  await db.from('pulse_missions').update({ plan: { ...plan, mode: 'mission', evidence_by_seq: evidenceBySeq }, status: 'running', claimed_at: null, owner_agent: 'ulises', updated_at: new Date().toISOString() }).eq('id', m.id);
   await remember(ctx, 'mission', 'decision', `Plan de Ulises: ${String(plan.understanding || '').slice(0, 800)} · Restricciones: ${(plan.constraints || []).join('; ').slice(0, 600)}`);
   for (const s of inserted || []) await message({ ...ctx, step_id: s.id }, 'ulises', s.agent_id, 'request', `Etapa ${s.seq}: ${s.directive}`);
   await message(ctx, 'ulises', 'ceo', 'decision', `Plan registrado con ${inserted?.length} etapas: ${(inserted || []).map(s => `${s.seq}. ${A[s.agent_id]?.name}`).join(' · ')}`);
@@ -107,7 +122,7 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
   const feedback = step.attempt > 0 && step.review ? `CORRECCIÓN SOLICITADA POR CALIDAD (intento ${step.attempt + 1}):\n- ${(step.review.required_changes || step.review.findings || []).join('\n- ')}` : '';
   const maxIter = Math.max(2, agent.max_steps);
   for (let i = 0; i < maxIter; i++) {
-    const last = i === maxIter - 1;
+    const last = i === maxIter - 1 || timeLeft() < 45000;
     const user = [`MISIÓN: ${m.title}\nOBJETIVO: ${m.objective}`, `TU TAREA (etapa ${step.seq}): ${step.directive}`, `CRITERIOS DE ACEPTACIÓN:\n- ${(step.acceptance || []).join('\n- ')}`, depText, feedback, transcript.join('\n'), last ? 'DEBES FINALIZAR AHORA con "action":"final".' : ''].filter(Boolean).join('\n\n');
     const out = await llm(ctx, i === 0 ? (step.attempt > 0 ? 'correct' : 'analyze') : 'act', agent.model_tier, system, user, final ? 6000 : 4500);
     let j: any;
@@ -144,11 +159,12 @@ async function review(m: any, step: any, agent: Agent, res: any, file: any, ctx:
   const A = await agents(); const qa = A.calidad;
   const hard: string[] = [];
   const evidence = (res.toolsUsed || []).filter((t: string) => t === 'wikipedia_summary' || t === 'fetch_url').length;
-  if (agent.id === 'iris' && res.sources.length < 3) hard.push('La investigación tiene menos de 3 fuentes verificadas por herramientas.');
-  if (agent.id === 'iris' && evidence < 3) hard.push(`Solo se consultó evidencia detallada (wikipedia_summary/fetch_url) ${evidence} vez/veces; se necesita al menos una por cada entidad principal (mínimo 3).`);
+  const external = (m.plan?.evidence_by_seq?.[step.seq] ?? (agent.id === 'iris' ? 'external' : 'none')) === 'external';
+  if (external && res.sources.length < 3) hard.push('La investigación tiene menos de 3 fuentes verificadas por herramientas.');
+  if (external && evidence < 3) hard.push(`Solo se consultó evidencia detallada (wikipedia_summary/fetch_url) ${evidence} vez/veces; se necesita al menos una por cada entidad principal (mínimo 3).`);
   if (step.output_format === 'xlsx' && (!file || file.formulas < 1)) hard.push('La hoja de cálculo no contiene fórmulas reales.');
   if (res.dropped > 2) hard.push(`Se citaron ${res.dropped} fuentes no verificadas.`);
-  const kind = agent.id === 'iris' ? 'investigación' : step.output_format === 'xlsx' ? 'hoja de cálculo financiera' : step.output_format === 'pdf' ? 'documento final consolidado' : 'entregable profesional';
+  const kind = external ? 'investigación con fuentes públicas' : step.output_format === 'xlsx' ? 'hoja de cálculo financiera' : step.output_format === 'pdf' ? 'documento final consolidado' : 'entregable profesional';
   const system = `${qa.instructions}\nSé exigente y calibrado: 10 solo para trabajo excepcional sin reparos; 7-8 para trabajo correcto listo para cliente; menos de 7 si hay afirmaciones sin fuente presentadas como hechos, supuestos no declarados, cifras sin explicar o incumplimiento de algún criterio. Señala siempre al menos una debilidad concreta en findings.\nResponde SOLO JSON: {"verdict":"approve|revise","score":0,"findings":["observación concreta"],"required_changes":["cambio concreto"]}`;
   const user = `TIPO: ${kind}\nTAREA: ${step.directive}\nCRITERIOS:\n- ${(step.acceptance || []).join('\n- ')}\nFUENTES VERIFICADAS: ${res.sources.map((s: any) => s.url).join(' ') || '(ninguna)'}\n${file ? `ARCHIVO: ${file.name} (${file.bytes} bytes${file.formulas != null ? `, ${file.formulas} fórmulas` : ''})\n` : ''}${res.table ? `TABLA: ${JSON.stringify(res.table).slice(0, 2500)}\n` : ''}\nENTREGABLE:\n${res.content.slice(0, 9000)}\n\nAprueba solo si cumple los criterios, es coherente, no inventa datos y está listo para un cliente. Puntúa de 0 a 10.`;
   const out = await llm({ ...ctx, agent_id: 'calidad' }, 'evaluate', qa.model_tier, system, user, 1200);
@@ -237,6 +253,11 @@ async function runStep(m: any, step: any) {
     return { seq: step.seq, outcome: 'approved', file: file.name };
   } catch (e) {
     const msg = String((e as Error)?.message || e).slice(0, 300);
+    if (e instanceof OutOfTime) {
+      // no es un fallo: la etapa vuelve a la cola sin gastar intentos
+      await db.from('pulse_mission_steps').update({ status: 'pending', claimed_at: null }).eq('id', step.id);
+      return { seq: step.seq, outcome: 'requeued_time' };
+    }
     const budget = e instanceof BudgetError;
     // error temporal: la etapa vuelve a la cola sin gastar un intento de calidad; tras 3 fallos queda marcada
     const failures = Number(step.review?.engine_failures || 0) + 1;
@@ -272,6 +293,7 @@ async function settle(m: any) {
 // ——— Tick: avanza misiones con la tarea programada ———
 async function tick(onlyMission?: string) {
   const t0 = Date.now(); const log: unknown[] = [];
+  deadline = deadline > t0 ? Math.min(deadline, t0 + 140000) : t0 + 140000;
   let q = db.from('pulse_missions').select('*').eq('engine', 'core').in('status', ['planning', 'running']).order('created_at').limit(4);
   if (onlyMission) q = q.eq('id', onlyMission);
   const { data: missions } = await q;
@@ -282,11 +304,19 @@ async function tick(onlyMission?: string) {
         const stale = new Date(Date.now() - 5 * 60000).toISOString();
         const { data: claimed } = await db.from('pulse_missions').update({ claimed_at: new Date().toISOString() }).eq('id', m.id).eq('status', 'planning').or(`claimed_at.is.null,claimed_at.lt.${stale}`).select('id');
         if (!claimed?.length) continue;
-        await planMission(m); log.push({ mission: m.id, planned: true });
+        try { await planMission(m); log.push({ mission: m.id, planned: true }); }
+        catch (e) {
+          // un plan que falla repetidamente no debe reintentarse para siempre
+          const fails = Number(m.plan?.planning_failures || 0) + 1;
+          const msg = String((e as Error)?.message || e).slice(0, 300);
+          await db.from('pulse_missions').update({ plan: { ...(m.plan || {}), planning_failures: fails }, last_error: msg, claimed_at: null, ...(fails >= 3 ? { status: 'needs_attention' } : {}), updated_at: new Date().toISOString() }).eq('id', m.id);
+          if (fails >= 3) await message({ user_id: m.user_id, mission_id: m.id, step_id: null, agent_id: 'ulises' }, 'ulises', 'ceo', 'blocker', `No pude preparar el plan tras 3 intentos: ${msg}`);
+          log.push({ mission: m.id, planning_error: msg, fails });
+        }
         continue;
       }
       let n = 0;
-      while (n < LIMITS.stepsPerTick && Date.now() - t0 < LIMITS.tickMs - 20000) {
+      while (n < LIMITS.stepsPerTick && timeLeft() > 75000) {
         const { data: claimed, error } = await db.rpc('pulse_core_claim_step', { p_mission: m.id });
         if (error) throw error;
         const step = claimed?.[0];
@@ -317,6 +347,30 @@ Deno.serve(async (req: Request) => {
     const { data } = await db.from('pulse_scheduler_credentials').select('token').eq('id', 1).single();
     if (!token || !data?.token || token !== data.token) return json({ ok: false, error: 'No autorizado' }, 401);
     return json({ ok: true, log: await tick(body.missionId ? String(body.missionId) : undefined) });
+  }
+
+  // Diagnóstico de archivos (solo con el token del programador): descarga cada entregable por URL firmada,
+  // como lo haría el navegador, y comprueba cabeceras y estructura. No modifica nada.
+  if (action === 'diag.files') {
+    const token = req.headers.get('x-pulse-scheduler-token') || '';
+    const { data: cred } = await db.from('pulse_scheduler_credentials').select('token').eq('id', 1).single();
+    if (!token || !cred?.token || token !== cred.token) return json({ ok: false, error: 'No autorizado' }, 401);
+    const { data: files } = await db.from('pulse_deliverables').select('id,filename,storage_path,mime_type,size_bytes,review_status').eq('mission_id', String(body.missionId || '')).limit(20);
+    const out = [];
+    for (const f of files || []) {
+      const r: any = { id: f.id, filename: f.filename, mime: f.mime_type, size_db: f.size_bytes };
+      try {
+        const { data: signed, error } = await db.storage.from(BUCKET).createSignedUrl(f.storage_path, 120);
+        if (error || !signed?.signedUrl) throw new Error(error?.message || 'sin URL firmada');
+        const res = await fetch(signed.signedUrl);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        Object.assign(r, { http: res.status, content_type: res.headers.get('content-type'), content_length: Number(res.headers.get('content-length')) || bytes.length, disposition: res.headers.get('content-disposition'), bytes: bytes.length, check: await inspectFile(bytes, f.mime_type) });
+        const dl = await db.storage.from(BUCKET).createSignedUrl(f.storage_path, 120, { download: f.filename });
+        if (dl.data?.signedUrl) { const h = await fetch(dl.data.signedUrl, { method: 'HEAD' }); r.download_disposition = h.headers.get('content-disposition'); r.download_http = h.status; }
+      } catch (e) { r.error = String((e as Error)?.message || e).slice(0, 200); }
+      out.push(r);
+    }
+    return json({ ok: true, files: out });
   }
 
   // acciones del CEO

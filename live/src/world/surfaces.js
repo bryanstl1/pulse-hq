@@ -124,7 +124,7 @@ export function drawSurfaces(surfaces, app) {
     else if (s.kind === 'board') drawDeptBoard(s.surface, room, app);
     else if (s.kind === 'wallScreen' && s.screen === 'company') drawCompany(s.surface, app);
     else if (s.kind === 'wallScreen' && s.screen === 'missions-mini') drawMissionsMini(s.surface, app);
-    else if (s.kind === 'chatScreen' || s.kind === 'dataWall') { if (!s.drawn) drawDecor(s.surface, s.kind, room); s.drawn = true; }
-    s.surface.commit();
+    else if (s.kind === 'chatScreen' || s.kind === 'dataWall') { if (!s.drawn) { drawDecor(s.surface, s.kind, room); s.drawn = true; s.surface.commit(); } continue; }
+    s.surface.commit(); // los decorativos se suben a la GPU una sola vez
   }
 }

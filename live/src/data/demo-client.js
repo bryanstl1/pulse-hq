@@ -182,6 +182,11 @@ export function createDemoClient({ speed = 1 } = {}) {
       db.pulse_missions.unshift(m);
       msg(m, null, 'ceo', 'ulises', 'request', `${body.title}: ${body.objective}`, { source: body.source || 'api' });
       later(2500, () => { m.claimed_at = iso(); });
+      // saludo o pregunta breve: Ulises responde directamente sin abrir misión (igual que el motor real)
+      if (body.objective.length < 90 && /^(ulises[, ]*)?(hola|buen[oa]s|qu[eé] tal|c[oó]mo est[aá]s|gracias)/i.test(body.objective)) {
+        later(4000, () => { run(m, null, 'ulises', 'plan'); msg(m, null, 'ulises', 'ceo', 'result', '¡Hola! Todo en orden por aquí. Cuando quieras, dime qué necesitas y armo el equipo.', { mode: 'reply' }); m.status = 'completed'; m.updated_at = iso(); });
+        return { data: { ok: true, missionId: m.id }, error: null };
+      }
       later(5000, () => {
         if (m.status !== 'planning') return;
         run(m, null, 'ulises', 'plan');
