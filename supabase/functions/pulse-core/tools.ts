@@ -28,7 +28,9 @@ export function matchesEntity(entity: string, title: string) {
   const A = words(entity), B = words(title);
   if (!A.length || !B.length) return fold(title).includes(fold(entity).trim());
   const initials = B.map(w => w[0]).join('');
-  return contains(B, A) || contains(A, B) || (initials.length >= 3 && A.includes(initials));
+  // una sola palabra distintiva debe abrir el título («BPM Entertainment» sí, «Moonage Daydream» no)
+  const inTitle = A.length === 1 ? B[0] === A[0] : contains(B, A);
+  return inTitle || contains(A, B) || (initials.length >= 3 && A.includes(initials));
 }
 
 export const TOOLS: Record<string, Tool> = {
