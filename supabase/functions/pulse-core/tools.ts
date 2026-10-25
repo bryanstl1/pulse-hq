@@ -19,6 +19,18 @@ function htmlToText(html: string) {
     .replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
 }
 
+// ¿El título de un artículo corresponde a la entidad buscada? (palabra distintiva en común o siglas: «EDC» ↔ «Electric Daisy Carnival»)
+const GENERIC = new Set(['festival', 'fest', 'mexico', 'music', 'musica', 'de', 'del', 'la', 'el', 'los', 'las', 'the', 'and', 'y', 'en', 'tour', 'carnaval', 'evento', 'event', 'club', 'company', 'empresa', 'grupo']);
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const words = (s: string) => fold(s).replace(/\([^)]*\)/g, ' ').split(/[^a-z0-9]+/).filter(w => w && !GENERIC.has(w));
+const contains = (a: string[], b: string[]) => b.length > 0 && a.join(' ').match(new RegExp(`(^| )${b.join(' ')}( |$)`)) !== null;
+export function matchesEntity(entity: string, title: string) {
+  const A = words(entity), B = words(title);
+  if (!A.length || !B.length) return fold(title).includes(fold(entity).trim());
+  const initials = B.map(w => w[0]).join('');
+  return contains(B, A) || contains(A, B) || (initials.length >= 3 && A.includes(initials));
+}
+
 export const TOOLS: Record<string, Tool> = {
   wikipedia_search: {
     description: 'Busca artículos en Wikipedia. Devuelve títulos, extractos y URLs verificables.',
@@ -57,13 +69,21 @@ export const TOOLS: Record<string, Tool> = {
       const items: any[] = [];
       for (const name of names) {
         try {
-          const sr = await fetch(`https://${lang}.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=1&srsearch=${encodeURIComponent(name)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
-          const title = sr.ok ? (await sr.json())?.query?.search?.[0]?.title : null;
-          if (!title) { items.push({ entity: name, found: false }); continue; }
-          const r = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(String(title).replace(/ /g, '_'))}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
-          if (!r.ok) { items.push({ entity: name, found: false, title }); continue; }
-          const j = await r.json();
-          items.push({ entity: name, found: true, title: j?.title, extract: str(j?.extract, 1200), url: j?.content_urls?.desktop?.page });
+          // solo cuenta un artículo cuyo título corresponda a la entidad (o sus siglas); primero en el idioma pedido y luego en el otro
+          let hit: any = null, nearest: string | null = null;
+          for (const lg of [lang, lang === 'es' ? 'en' : 'es']) {
+            const sr = await fetch(`https://${lg}.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=5&srsearch=${encodeURIComponent(name)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
+            const titles: string[] = sr.ok ? ((await sr.json())?.query?.search || []).map((s: any) => String(s.title)) : [];
+            nearest = nearest || titles[0] || null;
+            const title = titles.find(t => matchesEntity(name, t));
+            if (!title) continue;
+            const r = await fetch(`https://${lg}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
+            if (!r.ok) continue;
+            const j = await r.json();
+            hit = { entity: name, found: true, lang: lg, title: j?.title, extract: str(j?.extract, 1500), url: j?.content_urls?.desktop?.page };
+            break;
+          }
+          items.push(hit || { entity: name, found: false, note: `Sin artículo propio en Wikipedia${nearest ? `; el resultado más cercano («${nearest}») no corresponde a la entidad` : ''}` });
         } catch { items.push({ entity: name, found: false }); }
       }
       const urls = items.filter(x => x.found && x.url).map(x => x.url);
