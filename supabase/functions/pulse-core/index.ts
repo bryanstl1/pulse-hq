@@ -176,7 +176,10 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
       const sources = [...sourceMap.values()];
       const dropped = cited.length - sources.length;
       const facts = (Array.isArray(j.facts) ? j.facts : []).slice(0, 12).map((f: any) => ({ text: String(f?.text || '').slice(0, 500), source_url: f?.source_url ? String(f.source_url) : null, verified: !!(f?.source_url && allowedUrls.has(norm(f.source_url))) }));
-      return { content: content + (dropped > 0 ? `\n\n> Nota del motor: se retiraron ${dropped} fuente(s) que no provenían de herramientas.` : ''), summary: String(j.summary || '').slice(0, 600), sources, facts, table: j.table, toolsUsed, dropped, evidence: evidenceCount() };
+      // las URLs consultadas quedan escritas en el propio entregable (no solo en metadatos)
+      const missing = external ? sources.filter(s => !content.includes(s.url)) : [];
+      const sourcesBlock = missing.length ? `\n\n## Fuentes consultadas por herramientas\n${missing.map((s, k) => `${k + 1}. ${s.title} — ${s.url}`).join('\n')}` : '';
+      return { content: content + sourcesBlock + (dropped > 0 ? `\n\n> Nota del motor: se retiraron ${dropped} fuente(s) que no provenían de herramientas.` : ''), summary: String(j.summary || '').slice(0, 600), sources, facts, table: j.table, toolsUsed, dropped, evidence: evidenceCount() };
     }
     transcript.push('SISTEMA: acción no reconocida; usa "tool" o "final".');
   }
