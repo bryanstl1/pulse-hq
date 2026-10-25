@@ -79,10 +79,13 @@ export const TOOLS: Record<string, Tool> = {
             nearest = nearest || titles[0] || null;
             const title = titles.find(t => matchesEntity(name, t));
             if (!title) continue;
-            const r = await fetch(`https://${lg}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
+            // texto del artículo (no solo el resumen): las cifras que cite el agente deben poder verificarse aquí
+            const r = await fetch(`https://${lg}.wikipedia.org/w/api.php?action=query&prop=extracts|info&inprop=url&explaintext=1&redirects=1&format=json&titles=${encodeURIComponent(title)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12000) });
             if (!r.ok) continue;
-            const j = await r.json();
-            hit = { entity: name, found: true, lang: lg, title: j?.title, extract: str(j?.extract, 1500), url: j?.content_urls?.desktop?.page };
+            const page: any = Object.values((await r.json())?.query?.pages || {})[0];
+            if (!page?.extract || !page?.fullurl) continue;
+            const text = String(page.extract).replace(/\n{2,}/g, '\n').replace(/\n=+ (Referencias|Enlaces externos|Véase también|References|External links|See also) =+[\s\S]*$/, '');
+            hit = { entity: name, found: true, lang: lg, title: page.title, extract: str(text, 3000), url: page.fullurl };
             break;
           }
           items.push(hit || { entity: name, found: false, note: `Sin artículo propio en Wikipedia${nearest ? `; el resultado más cercano («${nearest}») no corresponde a la entidad` : ''}` });
