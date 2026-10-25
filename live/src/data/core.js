@@ -37,6 +37,11 @@ export function coreIntent(snapshot, dept, now = Date.now()) {
 
   // Ulises recibe y planifica la misión
   if (agentId === 'ulises') {
+    // respuesta directa (sin misión): saludo o pregunta breve contestada por Ulises
+    const reply = msgs.filter(x => x.from_agent === 'ulises' && x.to_agent === 'ceo' && x.kind === 'result' && x.artifact?.mode === 'reply' && now - t(x.created_at) <= RESULT_FRESH_MS && byId[x.mission_id])
+      .sort((a, b) => t(b.created_at) - t(a.created_at))[0];
+    const planningNow = missions.some(x => x.status === 'planning');
+    if (reply && !planningNow) return { kind: 'completed', label: 'Resultado recibido', detail: 'Ulises respondió directamente (sin abrir misión)', mission: { id: reply.mission_id, title: byId[reply.mission_id].title, seq: 0 }, evidence: { mission: reply.mission_id, message: reply.id } };
     const m = missions.filter(x => x.status === 'planning').sort((a, b) => t(b.created_at) - t(a.created_at))[0];
     if (m) {
       const req = msgs.find(x => x.mission_id === m.id && x.from_agent === 'ceo' && x.kind === 'request');
