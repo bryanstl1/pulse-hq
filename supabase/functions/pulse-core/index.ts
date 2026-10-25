@@ -116,7 +116,7 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
   const allowedUrls = new Map<string, string>();
   for (const d of deps) for (const s of (Array.isArray(d.sources) ? d.sources : [])) if (s?.url) allowedUrls.set(norm(s.url), s.title || s.url);
   const transcript: string[] = []; const toolsUsed: string[] = [];
-  const research = agent.tools.includes('wikipedia_summary') ? ' Método de investigación: localiza cada entidad con wikipedia_search y después obtén evidencia concreta de CADA una con wikipedia_summary o con fetch_url de su sitio oficial; guarda los hechos clave con memory_write y su URL. Reparte tus pasos para cubrir todas las entidades antes de finalizar.' : '';
+  const research = agent.tools.includes('wikipedia_summary') ? ' Método de investigación: haz como máximo una búsqueda (wikipedia_search) por entidad y después llama a wikipedia_summary con el título exacto devuelto (o fetch_url de su sitio oficial) para CADA entidad; necesitas al menos 3 consultas de evidencia detallada antes de finalizar. Si una entidad no tiene artículo, usa el más específico disponible y decláralo. Reparte tus pasos para cubrir todas las entidades.' : '';
   const system = `Eres ${agent.name}, ${agent.role} de PULSE HQ${agent.department ? ` (${agent.department})` : ''}. ${agent.instructions}${research}\nResponsabilidades: ${agent.responsibilities}\nCiclo: analizar → planificar → actuar con herramientas → observar → evaluar → finalizar.\nHerramientas permitidas:\n${toolCatalog(agent.tools) || '(ninguna)'}\nResponde SIEMPRE con un único objeto JSON.\nUsar herramienta: {"thought":"breve","action":"tool","tool":"nombre","input":{}}\nTerminar: {"thought":"breve","action":"final","summary":"2-3 frases","content_markdown":"entregable completo en Markdown con # y ##","facts":[{"text":"hecho","source_url":"https://..."}],"sources":[{"title":"...","url":"https://..."}]${xlsx ? ',"table":{"sheets":[{"name":"Presupuesto","columns":["Concepto","Cantidad","Costo unitario MXN","Total MXN"],"rows":[["Concepto",1,1000,"=B2*C2"]],"notes":["Supuestos"]}]}' : ''}}\nREGLAS: no inventes datos, marcas, contactos, cifras ni URLs; solo cita URLs devueltas por herramientas en esta tarea o por etapas anteriores; marca lo no verificado como hipótesis; no afirmes haber contactado, publicado ni pagado nada.${xlsx ? ' La tabla debe usar fórmulas reales de Excel (por ejemplo =B2*C2 y =SUM(D2:D9)) y una fila de totales; las cifras son estimaciones explícitas.' : ''}${final ? ' Este es el documento final para el CEO: profesional, completo, en español, con secciones claras.' : ''}`;
   const depText = deps.length ? 'RESULTADOS APROBADOS DE ETAPAS ANTERIORES (reutilízalos, no los regeneres):\n' + deps.map(d => `--- Etapa ${d.seq} (${d.agent_id}) ---\n${String(d.result || '').slice(0, final ? 2600 : 3200)}\nFuentes: ${(d.sources || []).map((s: any) => s.url).join(' ')}`).join('\n') : '';
   const feedback = step.attempt > 0 && step.review ? `CORRECCIÓN SOLICITADA POR CALIDAD (intento ${step.attempt + 1}):\n- ${(step.review.required_changes || step.review.findings || []).join('\n- ')}` : '';
@@ -165,7 +165,7 @@ async function review(m: any, step: any, agent: Agent, res: any, file: any, ctx:
   if (step.output_format === 'xlsx' && (!file || file.formulas < 1)) hard.push('La hoja de cálculo no contiene fórmulas reales.');
   if (res.dropped > 2) hard.push(`Se citaron ${res.dropped} fuentes no verificadas.`);
   const kind = external ? 'investigación con fuentes públicas' : step.output_format === 'xlsx' ? 'hoja de cálculo financiera' : step.output_format === 'pdf' ? 'documento final consolidado' : 'entregable profesional';
-  const system = `${qa.instructions}\nSé exigente y calibrado: 10 solo para trabajo excepcional sin reparos; 7-8 para trabajo correcto listo para cliente; menos de 7 si hay afirmaciones sin fuente presentadas como hechos, supuestos no declarados, cifras sin explicar o incumplimiento de algún criterio. Señala siempre al menos una debilidad concreta en findings.\nResponde SOLO JSON: {"verdict":"approve|revise","score":0,"findings":["observación concreta"],"required_changes":["cambio concreto"]}`;
+  const system = `${qa.instructions}\nSé exigente y calibrado: 10 solo para trabajo excepcional sin reparos; 7-8 para trabajo correcto listo para cliente; menos de 7 si hay afirmaciones sin fuente presentadas como hechos, supuestos no declarados, cifras sin explicar o incumplimiento de algún criterio. Señala siempre al menos una debilidad concreta en findings. No exijas fuentes que las herramientas disponibles (Wikipedia y páginas públicas) no pueden obtener: si una entidad no tiene artículo propio, acepta la fuente más específica disponible siempre que la limitación quede declarada; tus cambios requeridos deben ser realizables con esas herramientas.\nResponde SOLO JSON: {"verdict":"approve|revise","score":0,"findings":["observación concreta"],"required_changes":["cambio concreto"]}`;
   const user = `TIPO: ${kind}\nTAREA: ${step.directive}\nCRITERIOS:\n- ${(step.acceptance || []).join('\n- ')}\nFUENTES VERIFICADAS: ${res.sources.map((s: any) => s.url).join(' ') || '(ninguna)'}\n${file ? `ARCHIVO: ${file.name} (${file.bytes} bytes${file.formulas != null ? `, ${file.formulas} fórmulas` : ''})\n` : ''}${res.table ? `TABLA: ${JSON.stringify(res.table).slice(0, 2500)}\n` : ''}\nENTREGABLE:\n${res.content.slice(0, 9000)}\n\nAprueba solo si cumple los criterios, es coherente, no inventa datos y está listo para un cliente. Puntúa de 0 a 10.`;
   const out = await llm({ ...ctx, agent_id: 'calidad' }, 'evaluate', qa.model_tier, system, user, 1200);
   let r: any; try { r = parseJson(out.text); } catch { r = { verdict: 'revise', score: 0, findings: ['El revisor no devolvió un dictamen válido'], required_changes: [] }; }
@@ -316,14 +316,17 @@ async function tick(onlyMission?: string) {
         continue;
       }
       let n = 0;
-      while (n < LIMITS.stepsPerTick && timeLeft() > 75000) {
+      // cada etapa necesita tiempo completo: solo se inicia si quedan >100 s en esta ejecución
+      while (n < LIMITS.stepsPerTick && timeLeft() > 100000) {
         const { data: claimed, error } = await db.rpc('pulse_core_claim_step', { p_mission: m.id });
         if (error) throw error;
         const step = claimed?.[0];
         if (!step) { log.push({ mission: m.id, settle: await settle(m) }); break; }
         const { data: fresh } = await db.from('pulse_missions').select('status').eq('id', m.id).single();
         if (fresh?.status !== 'running') { await db.from('pulse_mission_steps').update({ status: 'pending', claimed_at: null }).eq('id', step.id); break; }
-        log.push(await runStep(m, step)); n++;
+        const r: any = await runStep(m, step); log.push(r); n++;
+        // una corrección o un reintento se ejecutan en la siguiente pasada, con el tiempo completo disponible
+        if (r?.outcome && r.outcome !== 'approved') break;
       }
     } catch (e) {
       const msg = String((e as Error)?.message || e).slice(0, 300);
