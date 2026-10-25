@@ -1,4 +1,21 @@
-# PULSE HQ · Estado de operaciones reales (23 oct 2026, 15:10 Monterrey)
+# PULSE HQ · Estado de operaciones reales
+
+## Actualización 25 oct 2026 (motor v5)
+
+### Diagnóstico con registros reales (Supabase, 23 oct)
+- **Chrome iOS** tenía sesión y usó la oficina: la misión `f621ee6e…` («Hola Ulises cómo estás», origen `office`) se creó de verdad, pero el motor convirtió un saludo en 4 etapas y Calidad exigió fuentes externas a una tarea interna de Iris → `needs_attention` tras 3 intentos (sin bucle infinito). Hubo un 429 de Gemini.
+- **Safari iOS**: 10 solicitudes de enlace (`/auth/v1/otp`), 7 con **429** (límite de correos). El enlace llevó al centro anterior (Site URL), no a `/live/`. Ninguna solicitud de Safari llegó a las tablas de la oficina nueva → «Load failed» = solicitud cortada antes de llegar (típico al cambiar a Mail en iOS).
+- **Congelamientos**: cada sondeo descargaba ~530 KB (textos completos de 57 tareas y todas las etapas) cada 10 s o 2.5 s, y redibujaba ~20 tableros y el panel aunque nada cambiara. Además, la calidad adaptativa *activaba* sombras cuando el teléfono iba lento.
+
+### Cambios
+- Motor v4/v5: respuesta directa de Ulises a saludos/preguntas breves (sin misión); evidencia externa solo en tareas marcadas `external`; 429 con `retryDelay`, ritmo de 2.5 s entre llamadas; cada etapa termina antes del límite de 150 s; corrección o reintento en la siguiente pasada con tiempo completo; planificación limitada a 3 fallos; Calidad no exige fuentes imposibles; acción `diag.files` (solo con token del programador).
+- Migración `pulse_core_v2_result_preview` (columna generada de 600 caracteres en `pulse_tasks` y `pulse_mission_steps`).
+- Oficina: sondeo ligero (`result_preview`), firma de cambios (0 redibujos en reposo, medido), sin sondeo en segundo plano, sombras desactivadas cuando va lento, recuperación de pérdida de WebGL, errores de red traducidos, enfriamiento de 60 s en el enlace de acceso, botón «Ya abrí el enlace» y detección de sesión al volver a la pestaña; PDF en visor, XLSX/MD como descarga.
+
+### Verificado
+- 35 pruebas locales pasan. Diagnóstico de archivos por URL firmada: PDF válido (5 páginas), XLSX válido (1 hoja, 16 filas, 12 fórmulas), cabeceras correctas y `Content-Disposition: attachment` en descarga.
+- Respuesta directa real: misión `76ac6a53-39ba-413d-b159-1fda1d4275af`, 1 ejecución, 735 tokens, sin etapas.
+
 
 ## Desplegado
 - Supabase `erluuujhgpreuuaskjwo`: función `pulse-core` **versión 3** (verify_jwt=false; el CEO se valida con JWT + PULSE_ALLOWED_EMAIL; la tarea programada usa token).
