@@ -125,14 +125,16 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
   // investigación externa: el motor no acepta un cierre sin evidencia suficiente mientras queden pasos
   const external = (m.plan?.evidence_by_seq?.[step.seq] ?? (agent.id === 'iris' ? 'external' : 'none')) === 'external';
   const candidates: string[] = []; const summarized = new Set<string>();
+  const evidenceUrls = new Map<string, { title: string; url: string }>(); // URLs consultadas en detalle con herramientas
+  const addEvidence = (url?: string, title?: string) => { if (url) evidenceUrls.set(norm(url), { title: String(title || url).slice(0, 200), url: String(url) }); };
   // la evidencia reunida en intentos anteriores de esta misma etapa sigue valiendo (no se reinicia en cada corrección)
   let prior = 0;
   if (external && step.attempt > 0) {
     const { data: prev } = await db.from('pulse_tool_calls').select('tool,output').eq('step_id', step.id).eq('ok', true).in('tool', ['wikipedia_summary', 'fetch_url', 'wikipedia_research']);
     for (const c of prev || []) {
       const items = c.tool === 'wikipedia_research' && Array.isArray(c.output) ? c.output.filter((x: any) => x?.found && x?.url) : [];
-      if (c.tool === 'wikipedia_research') { prior += items.length; items.forEach((x: any) => { allowedUrls.set(norm(x.url), x.title || x.url); summarized.add(String(x.title || '')); }); }
-      else { prior += 1; const u = (c.output as any)?.url; if (u) allowedUrls.set(norm(u), (c.output as any)?.title || u); }
+      if (c.tool === 'wikipedia_research') { prior += items.length; items.forEach((x: any) => { allowedUrls.set(norm(x.url), x.title || x.url); summarized.add(String(x.title || '')); addEvidence(x.url, x.title); }); }
+      else { prior += 1; const u = (c.output as any)?.url; if (u) { allowedUrls.set(norm(u), (c.output as any)?.title || u); addEvidence(u, (c.output as any)?.title); } }
     }
     if (prior) transcript.push(`SISTEMA: en intentos anteriores ya reuniste ${prior} evidencias detalladas válidas (sus URLs siguen siendo citables). Céntrate en atender las correcciones de Calidad.`);
   }
@@ -151,8 +153,8 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
       catch (e) { r = { ok: false, output: null, error: String((e as Error)?.message || e).slice(0, 200) }; }
       await db.from('pulse_tool_calls').insert({ ...ctx, tool: name, input: j.input || {}, output: r.ok ? (() => { const sj = JSON.stringify(r.output ?? null); return sj.length <= 20000 ? r.output : { truncated: sj.slice(0, 20000) }; })() : null, ok: r.ok, error: r.error || null, duration_ms: Date.now() - t0 }).then(() => {}, () => {});
       for (const u of r.urls || []) allowedUrls.set(norm(u), u);
-      if (r.ok && name === 'wikipedia_research') { for (const it of (r.output as any[]).filter((x: any) => x?.found)) { toolsUsed.push('wikipedia_summary'); summarized.add(String(it.title || '')); } }
-      else if (r.ok) toolsUsed.push(name); // solo cuentan las consultas que devolvieron datos
+      if (r.ok && name === 'wikipedia_research') { for (const it of (r.output as any[]).filter((x: any) => x?.found)) { toolsUsed.push('wikipedia_summary'); summarized.add(String(it.title || '')); addEvidence(it.url, it.title); } }
+      else if (r.ok) { toolsUsed.push(name); if (name === 'wikipedia_summary' || name === 'fetch_url') addEvidence((r.output as any)?.url, (r.output as any)?.title); } // solo cuentan las consultas que devolvieron datos
       if (r.ok && name === 'wikipedia_search' && Array.isArray(r.output)) for (const it of (r.output as any[]).slice(0, 3)) if (it?.title && !candidates.includes(it.title)) candidates.push(String(it.title));
       if (r.ok && name === 'wikipedia_summary') summarized.add(String((r.output as any)?.title || j.input?.title || ''));
       transcript.push(`OBSERVACIÓN de ${name}: ${JSON.stringify(r.ok ? r.output : { error: r.error }).slice(0, 2200)}`);
@@ -168,7 +170,10 @@ async function agentLoop(agent: Agent, step: any, m: any, deps: any[], ctx: Ctx)
       if (out.incomplete && !last) { transcript.push('SISTEMA: la respuesta se truncó; entrega una versión más concisa.'); continue; }
       if (content.length < (final ? 1200 : 300)) { if (last) throw new Error('El agente no produjo un entregable suficiente'); transcript.push('SISTEMA: el entregable es demasiado corto o incompleto; desarróllalo.'); continue; }
       const cited = (Array.isArray(j.sources) ? j.sources : []).filter((s: any) => s?.url);
-      const sources = [...new Map(cited.filter((s: any) => allowedUrls.has(norm(s.url))).map((s: any) => [norm(s.url), { title: String(s.title || s.url).slice(0, 200), url: String(s.url) }])).values()];
+      const sourceMap = new Map(cited.filter((s: any) => allowedUrls.has(norm(s.url))).map((s: any) => [norm(s.url), { title: String(s.title || s.url).slice(0, 200), url: String(s.url) }]));
+      // en investigación externa, toda URL consultada en detalle con herramientas forma parte de las fuentes (son reales y verificables)
+      if (external) for (const [k, v] of evidenceUrls) if (!sourceMap.has(k)) sourceMap.set(k, v);
+      const sources = [...sourceMap.values()];
       const dropped = cited.length - sources.length;
       const facts = (Array.isArray(j.facts) ? j.facts : []).slice(0, 12).map((f: any) => ({ text: String(f?.text || '').slice(0, 500), source_url: f?.source_url ? String(f.source_url) : null, verified: !!(f?.source_url && allowedUrls.has(norm(f.source_url))) }));
       return { content: content + (dropped > 0 ? `\n\n> Nota del motor: se retiraron ${dropped} fuente(s) que no provenían de herramientas.` : ''), summary: String(j.summary || '').slice(0, 600), sources, facts, table: j.table, toolsUsed, dropped, evidence: evidenceCount() };
